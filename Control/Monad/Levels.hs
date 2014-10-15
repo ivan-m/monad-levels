@@ -40,9 +40,6 @@ class (MonadTower m, MonadTower (LowerMonad m)
 lift :: (MonadLevel m) => LowerMonad m a -> m a
 lift m = wrap $ \ _unwrap addI -> addI m
 
-newtype CheckT m a = CT { unCheck :: m a }
-                 deriving (Eq, Ord, Show, Read)
-
 data Nat = Zero | Suc Nat
 
 class SatisfyConstraint (n :: Nat) (m :: * -> *) (c :: (* -> *) -> Constraint) where
