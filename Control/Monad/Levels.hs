@@ -79,7 +79,7 @@ instance (c m, m ~ SatMonad c m) => SatisfyConstraint_ Zero c m where
 instance (MonadLevel m, SatisfyConstraint_ n c (LowerMonad m), SatMonad c m ~ SatMonad c (LowerMonad m))
          => SatisfyConstraint_ (Suc n) c m where
 
-  _lower _ _ m = wrap (\ _unwrap addI -> addI (_lower (proxy# :: Proxy# n) (proxy# :: Proxy# c) m))
+  _lower _ c m = wrap (\ _unwrap addI -> addI (_lower (proxy# :: Proxy# n) c m))
 
 
 type SatisfyConstraint c m = ( SatisfyConstraint_ (FindSatisfied c m) c m
