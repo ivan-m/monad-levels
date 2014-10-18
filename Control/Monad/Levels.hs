@@ -68,31 +68,22 @@ lift m = wrap $ \ _unwrap addI -> addI m
 
 data Nat = Zero | Suc Nat
 
-class (c (SatMonad_ n c m), ConstraintSatisfied c (SatMonad_ n c m) ~ True)
-      => SatisfyConstraint_ (n :: Nat) (c :: (* -> *) -> Constraint) (m :: * -> *) where
+class SatisfyConstraint_ (n :: Nat) (c :: (* -> *) -> Constraint) (m :: * -> *) where
 
-  type SatMonad_ n c m :: * -> *
+  _lower :: Proxy# n -> Proxy# c ->  SatMonad c m a -> m a
 
-  _lower :: Proxy# n -> Proxy# c ->  SatMonad_ n c m a -> m a
-
-instance (ConstraintSatisfied c m ~ True, c m) => SatisfyConstraint_ Zero c m where
-
-  type SatMonad_ Zero c m = m
+instance (c m, m ~ SatMonad c m) => SatisfyConstraint_ Zero c m where
 
   _lower _ _ m = m
 
-instance (MonadLevel m, SatisfyConstraint_ n c (LowerMonad m))
+instance (MonadLevel m, SatisfyConstraint_ n c (LowerMonad m), SatMonad c m ~ SatMonad c (LowerMonad m))
          => SatisfyConstraint_ (Suc n) c m where
 
-  type SatMonad_ (Suc n) c m = SatMonad_ n c (LowerMonad m)
-
-  _lower _ _ m = wrap (\ _unwrap addI -> addI (_lower (proxy# :: Proxy# n) (proxy# :: Proxy# c)  m))
+  _lower _ _ m = wrap (\ _unwrap addI -> addI (_lower (proxy# :: Proxy# n) (proxy# :: Proxy# c) m))
 
 
 type SatisfyConstraint c m = ( SatisfyConstraint_ (FindSatisfied c m) c m
                              , c (SatMonad c m))
-
-type SatMonad c m = SatMonad_ (FindSatisfied c m) c m
 
 lower :: forall c m a. (SatisfyConstraint c m) =>
          Proxy# (c :: (* -> *) -> Constraint) -> SatMonad c m a -> m a
@@ -125,7 +116,8 @@ type family FindSat (bms :: [(Bool, * -> *)]) :: * -> * where
   FindSat ('(True,  m) ': t) = m
   FindSat ('(False, m) ': t) = FindSat t
 
-type SatMonad' (c :: (* -> *) -> Constraint) (m :: * -> *) = FindSat (TrySatisfy c m)
+-- | The Monad in the tower that satisfies the provided constraint.
+type SatMonad (c :: (* -> *) -> Constraint) (m :: * -> *) = FindSat (TrySatisfy c m)
 
 -- -----------------------------------------------------------------------------
 
@@ -190,7 +182,7 @@ type HasState s m = ( MonadTower_ m
                     , HasState_ s (SatMonad (HasState_ s) m))
 
 state :: forall m s a. (HasState s m) => (s -> (a,s)) -> m a
-state f = lower (proxy# :: Proxy# (HasState_ s)) (_state f :: SatMonad (HasState_ s) m a)
+state = lower (proxy# :: Proxy# (HasState_ s)) . _state
 
 get :: (HasState s m) => m s
 get = state (\s -> (s,s))
