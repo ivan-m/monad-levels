@@ -29,11 +29,9 @@ class (Applicative m, Monad m) => MonadTower_ m where
 
 instance MonadTower_ []
 
-class (MonadTower_ m, MonadTower_ (BaseMonad m), BaseMonad (BaseMonad m) ~ BaseMonad m, BaseMonad m ~ BaseMonad (BaseMonad m))
-      => MonadTower m
-
-instance (MonadTower_ m, MonadTower_ (BaseMonad m), BaseMonad (BaseMonad m) ~ BaseMonad m, BaseMonad m ~ BaseMonad (BaseMonad m))
-         => MonadTower m
+type MonadTower m = ( MonadTower_ m, MonadTower_ (BaseMonad m)
+                    , BaseMonad (BaseMonad m) ~ BaseMonad m
+                    , BaseMonad m ~ BaseMonad (BaseMonad m))
 
 class (MonadTower m, MonadTower (LowerMonad m)
       , BaseMonad m ~ BaseMonad (LowerMonad m), BaseMonad (LowerMonad m) ~ BaseMonad m)
