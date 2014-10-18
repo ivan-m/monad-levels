@@ -1,8 +1,8 @@
 {-# LANGUAGE ConstraintKinds, DataKinds, DefaultSignatures, DeriveFunctor,
              FlexibleContexts, FlexibleInstances, GeneralizedNewtypeDeriving,
              KindSignatures, MagicHash, MultiParamTypeClasses, PolyKinds,
-             RankNTypes, ScopedTypeVariables, TypeFamilies, TypeOperators,
-             UndecidableInstances #-}
+             RankNTypes, ScopedTypeVariables, TupleSections, TypeFamilies,
+             TypeOperators, UndecidableInstances #-}
 
 {- |
    Module      : Control.Monad.Levels
@@ -20,6 +20,8 @@ import Control.Applicative
 import GHC.Exts            (Constraint)
 import GHC.Prim            (Proxy#, proxy#)
 
+import qualified Control.Monad.Trans.State.Lazy as LSt
+
 -- -----------------------------------------------------------------------------
 
 class (Applicative m, Monad m) => MonadTower_ m where
@@ -28,6 +30,10 @@ class (Applicative m, Monad m) => MonadTower_ m where
   type BaseMonad m = m
 
 instance MonadTower_ []
+
+instance (MonadTower m) => MonadTower_ (LSt.StateT s m) where
+
+  type BaseMonad (LSt.StateT s m) = BaseMonad m
 
 type MonadTower m = ( MonadTower_ m, MonadTower_ (BaseMonad m)
                     , BaseMonad (BaseMonad m) ~ BaseMonad m
@@ -46,6 +52,14 @@ class (MonadTower m, MonadTower (LowerMonad m)
               -> (LowerMonad m a -> LowerMonad m (InnerValue m a))
               -> LowerMonad m (InnerValue m a))
            -> m a
+
+instance (MonadTower m) => MonadLevel (LSt.StateT s m) where
+
+  type LowerMonad (LSt.StateT s m) = m
+
+  type InnerValue (LSt.StateT s m) a = (a,s)
+
+  wrap f = LSt.StateT $ \ s -> f (`LSt.runStateT` s) (fmap (,s))
 
 lift :: (MonadLevel m) => LowerMonad m a -> m a
 lift m = wrap $ \ _unwrap addI -> addI m
@@ -142,6 +156,47 @@ type IOBase m = (HasBaseMonad m, BaseMonad m ~ IO)
 
 liftIO :: (IOBase m) => IO a -> m a
 liftIO = liftBase
+
+-- -----------------------------------------------------------------------------
+
+class (MonadTower m) => HasState_ s m where
+
+  _state :: (s -> (a,s)) -> m a
+
+  _get :: m s
+  _get = _state (\s -> (s,s))
+  {-# INLINE _get #-}
+
+  _put :: s -> m ()
+  _put s = _state (const ((),s))
+  {-# INLINE _put #-}
+
+instance (MonadTower m) => HasState_ s (LSt.StateT s m) where
+
+  _state = LSt.state
+
+  _get = LSt.get
+
+  _put = LSt.put
+
+type instance ConstraintSatisfied (HasState_ s) m = SameState s m
+
+type family SameState s m where
+  SameState s (LSt.StateT s m) = True
+  SameState s m                = False
+
+type HasState s m = ( MonadTower_ m
+                    , SatisfyConstraint (HasState_ s) m
+                    , HasState_ s (SatMonad (HasState_ s) m))
+
+state :: forall m s a. (HasState s m) => (s -> (a,s)) -> m a
+state f = lower (proxy# :: Proxy# (HasState_ s)) (_state f :: SatMonad (HasState_ s) m a)
+
+get :: (HasState s m) => m s
+get = state (\s -> (s,s))
+
+modify :: (HasState s m) => (s -> s) -> m ()
+modify f = state (\ s -> ((), f s))
 
 -- -----------------------------------------------------------------------------
 
