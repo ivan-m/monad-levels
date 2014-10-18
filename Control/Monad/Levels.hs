@@ -61,7 +61,7 @@ class (c (SatMonad_ n c m), ConstraintSatisfied c (SatMonad_ n c m) ~ True)
 
   type SatMonad_ n c m :: * -> *
 
-  _lower :: Proxy# c -> Proxy# n -> SatMonad_ n c m a -> m a
+  _lower :: Proxy# n -> Proxy# c ->  SatMonad_ n c m a -> m a
 
 instance (ConstraintSatisfied c m ~ True, c m) => SatisfyConstraint_ Zero c m where
 
@@ -74,7 +74,7 @@ instance (MonadLevel m, SatisfyConstraint_ n c (LowerMonad m))
 
   type SatMonad_ (Suc n) c m = SatMonad_ n c (LowerMonad m)
 
-  _lower _ _ m = wrap (\ _unwrap addI -> addI (_lower (proxy# :: Proxy# c) (proxy# :: Proxy# n) m))
+  _lower _ _ m = wrap (\ _unwrap addI -> addI (_lower (proxy# :: Proxy# n) (proxy# :: Proxy# c)  m))
 
 
 type SatisfyConstraint c m = SatisfyConstraint_ (FindSatisfied c m) c m
@@ -83,7 +83,7 @@ type SatMonad c m = SatMonad_ (FindSatisfied c m) c m
 
 lower :: forall c m a. (SatisfyConstraint c m) =>
          Proxy# (c :: (* -> *) -> Constraint) -> SatMonad c m a -> m a
-lower p m = _lower p (proxy# :: Proxy# (FindSatisfied c m)) m
+lower = _lower (proxy# :: Proxy# (FindSatisfied c m))
 
 type MonadConstraint c m = (Monad m, c m)
 
