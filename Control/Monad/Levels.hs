@@ -21,6 +21,7 @@ import GHC.Exts            (Constraint)
 import GHC.Prim            (Proxy#, proxy#)
 
 import qualified Control.Monad.Trans.State.Lazy as LSt
+import Data.Functor.Identity
 
 -- -----------------------------------------------------------------------------
 
@@ -30,14 +31,21 @@ class (Applicative m, Monad m) => MonadTower_ m where
   type BaseMonad m = m
 
 instance MonadTower_ []
+instance MonadTower_ Maybe
+instance MonadTower_ IO
+instance MonadTower_ (Either e)
+instance MonadTower_ ((->) r)
+
+instance MonadTower_ Identity
 
 instance (MonadTower m) => MonadTower_ (LSt.StateT s m) where
-
   type BaseMonad (LSt.StateT s m) = BaseMonad m
 
 type MonadTower m = ( MonadTower_ m, MonadTower_ (BaseMonad m)
                     , BaseMonad (BaseMonad m) ~ BaseMonad m
                     , BaseMonad m ~ BaseMonad (BaseMonad m))
+
+-- -----------------------------------------------------------------------------
 
 class (MonadTower m, MonadTower (LowerMonad m)
       , BaseMonad m ~ BaseMonad (LowerMonad m), BaseMonad (LowerMonad m) ~ BaseMonad m)
