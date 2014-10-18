@@ -137,6 +137,11 @@ liftBase :: (HasBaseMonad m) => BaseMonad m a -> m a
 liftBase m = lower (proxy# :: Proxy# IsBaseMonad) m
 {-# INLINE liftBase #-}
 
+type IOBase m = (HasBaseMonad m, BaseMonad m ~ IO)
+
+liftIO :: (IOBase m) => IO a -> m a
+liftIO = liftBase
+
 -- -----------------------------------------------------------------------------
 
 newtype ID m a = ID { unID :: m a }
