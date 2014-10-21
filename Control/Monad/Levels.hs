@@ -102,11 +102,11 @@ instance (MonadLevel m) => ConstraintCanPassThrough IsBaseMonad m
 
 data Nat = Zero | Suc Nat
 
-class SatisfyConstraint_ (n :: Nat) (c :: (* -> *) -> Constraint) (m :: * -> *) where
+class (MonadTower m) => SatisfyConstraint_ (n :: Nat) (c :: (* -> *) -> Constraint) m where
 
   _lower :: Proxy# n -> Proxy# c ->  SatMonad c m a -> m a
 
-instance (c m, m ~ SatMonad c m) => SatisfyConstraint_ Zero c m where
+instance (MonadTower m, c m, m ~ SatMonad c m) => SatisfyConstraint_ Zero c m where
 
   _lower _ _ m = m
 
@@ -118,7 +118,11 @@ instance (ConstraintCanPassThrough c m, SatisfyConstraint_ n c (LowerMonad m)
 
 
 type SatisfyConstraint c m = ( SatisfyConstraint_ (FindSatisfied c m) c m
-                             , c (SatMonad c m))
+                             , c (SatMonad c m)
+                             -- Best current way of stating that the
+                             -- satisfying monad is a lower level of
+                             -- the specified one.
+                             , BaseMonad (SatMonad c m) ~ BaseMonad m)
 
 lower :: forall c m a. (SatisfyConstraint c m) =>
          Proxy# (c :: (* -> *) -> Constraint) -> SatMonad c m a -> m a
@@ -170,7 +174,7 @@ instance (MonadTower m, MonadTower n, m ~ n) => IsSameMonad m n
 
 type instance ConstraintSatisfied (IsSameMonad m) n = SameMonad m n
 
-type HasBaseMonad m = (MonadTower m, SatisfyConstraint IsBaseMonad m, SatMonad IsBaseMonad m ~ BaseMonad m)
+type HasBaseMonad m = (MonadTower m, SatisfyConstraint IsBaseMonad m)
 
 liftBase :: (HasBaseMonad m) => BaseMonad m a -> m a
 liftBase m = lower (proxy# :: Proxy# IsBaseMonad) m
@@ -209,9 +213,7 @@ type family SameState s m where
   SameState s (LSt.StateT s m) = True
   SameState s m                = False
 
-type HasState s m = ( MonadTower_ m
-                    , SatisfyConstraint (HasState_ s) m
-                    , HasState_ s (SatMonad (HasState_ s) m))
+type HasState s m = SatisfyConstraint (HasState_ s) m
 
 state :: forall m s a. (HasState s m) => (s -> (a,s)) -> m a
 state = lower (proxy# :: Proxy# (HasState_ s)) . _state
