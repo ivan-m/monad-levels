@@ -1,8 +1,9 @@
 {-# LANGUAGE ConstraintKinds, DataKinds, DefaultSignatures, DeriveFunctor,
              FlexibleContexts, FlexibleInstances, GeneralizedNewtypeDeriving,
-             KindSignatures, MagicHash, MultiParamTypeClasses, PolyKinds,
-             RankNTypes, ScopedTypeVariables, TupleSections, TypeFamilies,
-             TypeOperators, UndecidableInstances #-}
+             KindSignatures, MagicHash, MultiParamTypeClasses,
+             OverlappingInstances, PolyKinds, RankNTypes, ScopedTypeVariables,
+             TupleSections, TypeFamilies, TypeOperators, UndecidableInstances
+             #-}
 
 {- |
    Module      : Control.Monad.Levels
@@ -20,8 +21,9 @@ import Control.Applicative
 import GHC.Exts            (Constraint)
 import GHC.Prim            (Proxy#, proxy#)
 
+import           Control.Monad.Trans.Cont       (ContT (..))
 import qualified Control.Monad.Trans.State.Lazy as LSt
-import Data.Functor.Identity
+import           Data.Functor.Identity
 
 -- -----------------------------------------------------------------------------
 
@@ -41,6 +43,9 @@ instance MonadTower_ Identity
 instance (MonadTower m) => MonadTower_ (LSt.StateT s m) where
   type BaseMonad (LSt.StateT s m) = BaseMonad m
 
+instance (MonadTower m) => MonadTower_ (ContT r m) where
+  type BaseMonad (ContT r m) = BaseMonad m
+
 type MonadTower m = ( MonadTower_ m, MonadTower_ (BaseMonad m)
                     , BaseMonad (BaseMonad m) ~ BaseMonad m
                     , BaseMonad m ~ BaseMonad (BaseMonad m))
@@ -56,6 +61,9 @@ class (MonadTower m, MonadTower (LowerMonad m)
   type InnerValue m a :: *
   type InnerValue m a = a
 
+  type AllConstraintsThrough m :: Bool
+  type AllConstraintsThrough m = True
+
   wrap :: ( ( m a -> LowerMonad m (InnerValue m a))
               -> (LowerMonad m a -> LowerMonad m (InnerValue m a))
               -> LowerMonad m (InnerValue m a))
@@ -69,8 +77,26 @@ instance (MonadTower m) => MonadLevel (LSt.StateT s m) where
 
   wrap f = LSt.StateT $ \ s -> f (`LSt.runStateT` s) (fmap (,s))
 
+instance (MonadTower m) => MonadLevel (ContT r m) where
+
+  type LowerMonad (ContT r m) = m
+
+  type InnerValue (ContT r m) a = r
+
+  type AllConstraintsThrough (ContT r m) = False
+
+  wrap f = ContT $ \ cont -> f (`runContT` cont) (>>= cont)
+
 lift :: (MonadLevel m) => LowerMonad m a -> m a
 lift m = wrap $ \ _unwrap addI -> addI m
+
+-- -----------------------------------------------------------------------------
+
+class (MonadLevel m) => ConstraintCanPassThrough (c :: (* -> *) -> Constraint) m
+
+instance (MonadLevel m, AllConstraintsThrough m ~ True) => ConstraintCanPassThrough c m
+
+instance (MonadLevel m) => ConstraintCanPassThrough IsBaseMonad m
 
 -- -----------------------------------------------------------------------------
 
@@ -84,7 +110,8 @@ instance (c m, m ~ SatMonad c m) => SatisfyConstraint_ Zero c m where
 
   _lower _ _ m = m
 
-instance (MonadLevel m, SatisfyConstraint_ n c (LowerMonad m), SatMonad c m ~ SatMonad c (LowerMonad m))
+instance (ConstraintCanPassThrough c m, SatisfyConstraint_ n c (LowerMonad m)
+         , SatMonad c m ~ SatMonad c (LowerMonad m))
          => SatisfyConstraint_ (Suc n) c m where
 
   _lower _ c m = wrap (\ _unwrap addI -> addI (_lower (proxy# :: Proxy# n) c m))
@@ -109,9 +136,6 @@ type TrySatisfy (c :: (* -> *) -> Constraint) (m :: (* -> *)) = TrySatisfy' c (B
 
 type family TrySatisfy' (c :: (* -> *) -> Constraint) (b :: (* -> *)) (m :: (* -> *)) :: [(Bool, * -> *)] where
   TrySatisfy' c b b = '[ '(ConstraintSatisfied c b, b) ]
-  -- Need this first in case of transformers that are not instance of MonadLevel
-  TrySatisfy' c b (t m) = '(ConstraintSatisfied c (t m), t m) ': TrySatisfy' c b m
-  -- Still need this for newtype wrappers, etc.
   TrySatisfy' c b m = '(ConstraintSatisfied c m, m) ': TrySatisfy' c b (LowerMonad m)
 
 type family FindTrue (bms :: [(Bool, * -> *)]) :: Nat where
@@ -197,6 +221,8 @@ get = state (\s -> (s,s))
 
 modify :: (HasState s m) => (s -> s) -> m ()
 modify f = state (\ s -> ((), f s))
+
+instance (MonadLevel m) => ConstraintCanPassThrough (HasState_ s) (ContT r m)
 
 -- -----------------------------------------------------------------------------
 
