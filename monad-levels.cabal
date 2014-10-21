@@ -17,7 +17,13 @@ cabal-version:       >=1.10
 
 library
   exposed-modules:     Control.Monad.Levels
-  -- other-modules:
+                     , Control.Monad.Levels.ConstraintPassing
+                     , Control.Monad.Levels.Constraints
+
+                     , Control.Monad.Levels.State
+
+  other-modules:       Control.Monad.Levels.Definitions
+
   -- other-extensions:
   build-depends:       base >=4.7 && <4.8
                      , transformers
