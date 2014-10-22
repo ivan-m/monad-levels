@@ -32,7 +32,7 @@ lift :: (MonadLevel m) => LowerMonad m a -> m a
 lift m = wrap $ \ _unwrap addI -> addI m
 
 -- | Ideally, this alias would not be needed as every instance of
---   'MonadBase' should satisfy the required constraint.  However,
+--   'MonadTower' should satisfy the required constraint.  However,
 --   this is needed for technical reasons.
 type HasBaseMonad m = SatisfyConstraint IsBaseMonad m
 
