@@ -16,15 +16,22 @@ module Control.Monad.Levels
        ( MonadTower_(..)
        , MonadTower
        , MonadLevel (..)
+         -- * Basic level manipulation
        , lift
+         -- ** Lifting from the base
        , HasBaseMonad
        , liftBase
        , BaseMonadOf
        , liftIO
+         -- * Lifting from a specific transformer
+       , CanLiftTransformer
+       , TransformedMonad
+       , liftT
        ) where
 
 import Control.Monad.Levels.Constraints
 import Control.Monad.Levels.Definitions
+import Control.Monad.Levels.Transformers
 
 -- -----------------------------------------------------------------------------
 

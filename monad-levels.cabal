@@ -19,6 +19,7 @@ library
   exposed-modules:     Control.Monad.Levels
                      , Control.Monad.Levels.ConstraintPassing
                      , Control.Monad.Levels.Constraints
+                     , Control.Monad.Levels.Transformers
 
                      , Control.Monad.Levels.State
 
