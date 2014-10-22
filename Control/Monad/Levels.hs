@@ -1,5 +1,6 @@
-{-# LANGUAGE ConstraintKinds, FlexibleContexts, MagicHash,
-             MultiParamTypeClasses, TypeFamilies #-}
+{-# LANGUAGE ConstraintKinds, DataKinds, FlexibleContexts, MagicHash,
+             MultiParamTypeClasses, PolyKinds, RankNTypes, ScopedTypeVariables,
+             TypeFamilies, UndecidableInstances #-}
 
 {- |
    Module      : Control.Monad.Levels
@@ -34,6 +35,12 @@ lift m = wrap $ \ _unwrap addI -> addI m
 --   'MonadBase' should satisfy the required constraint.  However,
 --   this is needed for technical reasons.
 type HasBaseMonad m = SatisfyConstraint IsBaseMonad m
+
+type instance ConstraintSatisfied IsBaseMonad m = SameMonad (BaseMonad m) m
+
+type family SameMonad (m :: * -> *) (n :: * -> *) where
+  SameMonad m m = True
+  SameMonad m n = False
 
 liftBase :: (HasBaseMonad m) => BaseMonad m a -> m a
 liftBase m = lower (proxy# :: Proxy# IsBaseMonad) m
