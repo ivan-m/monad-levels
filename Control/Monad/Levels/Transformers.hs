@@ -20,8 +20,14 @@ module Control.Monad.Levels.Transformers
        , HasTransformer_
        ) where
 
+import Control.Monad.Levels.ConstraintPassing
 import Control.Monad.Levels.Constraints
 import Control.Monad.Levels.Definitions
+
+import           Control.Monad.Trans.Cont         (ContT)
+import           Control.Monad.Trans.List         (ListT)
+import qualified Control.Monad.Trans.State.Lazy   as LSt
+import qualified Control.Monad.Trans.State.Strict as SSt
 
 -- -----------------------------------------------------------------------------
 
@@ -50,3 +56,15 @@ type family IsTransformer (t :: (* -> *) -> * -> *) (m :: * -> *) where
 
 liftT :: (CanLiftTransformer t m) => TransformedMonad t m a -> m a
 liftT m = lower (proxy# :: Proxy# (HasTransformer_ t)) (_liftT m)
+
+-- -----------------------------------------------------------------------------
+-- ContT and ListT instances
+
+-- Note: RWS transformers aren't allowed for ContT and ListT as they
+-- don't allow passing through of Writer manipulations.
+
+instance (MonadLevel m) => ConstraintCanPassThrough (HasTransformer_ (LSt.StateT s)) (ContT r m)
+instance (MonadLevel m) => ConstraintCanPassThrough (HasTransformer_ (LSt.StateT s)) (ListT m)
+
+instance (MonadLevel m) => ConstraintCanPassThrough (HasTransformer_ (SSt.StateT s)) (ContT r m)
+instance (MonadLevel m) => ConstraintCanPassThrough (HasTransformer_ (SSt.StateT s)) (ListT m)
