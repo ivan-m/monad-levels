@@ -81,3 +81,116 @@ type family FindSat (bms :: [(Bool, * -> *)]) :: * -> * where
 
 -- | The Monad in the tower that satisfies the provided constraint.
 type SatMonad (c :: (* -> *) -> Constraint) (m :: * -> *) = FindSat (TrySatisfy c m)
+
+-- -----------------------------------------------------------------------------
+
+-- | Class representing arguments/parameters for lower-able variadic
+--   functions.
+--
+--   An argument is either:
+--
+--       * A constant value 'Const'
+--
+--       * A value in the specified monad 'MonadicValue'
+--
+--       * A function from a constant to an existing 'VariadicArg' instance 'Func'.
+class VariadicArg v where
+
+  -- | The type that the variadic guard corresponds to within the
+  --   monad @(m a)@.
+  type VariadicType v (m :: * -> *) a
+
+  lowerVArg :: (MonadLevel m) => Proxy# v
+                              -> VariadicType v m a
+                              -> Unwrapper m a (VariadicType v (LowerMonad m) (InnerValue m a))
+
+-- | A constant type that does not depend upon the current monadic
+--   context.  That is, @Const b@ corresponds to just @b@.
+data Const b
+
+instance VariadicArg (Const b) where
+  type VariadicType (Const b) m a = b
+
+  lowerVArg _ b _ _ = b
+
+-- | Corresponds to @m a@.
+data MonadicValue
+
+instance VariadicArg MonadicValue where
+  type VariadicType MonadicValue m a = m a
+
+  lowerVArg _ m unwrap _ = unwrap m
+
+-- | Represents the function @a -> b@.
+data Func a b
+
+instance (VariadicArg va) => VariadicArg (Func b va) where
+  type VariadicType (Func b va) m a = b -> VariadicType va m a
+
+  lowerVArg _ f unwrap addI
+    = (\ v -> lowerVArg (proxy# :: Proxy# va) v unwrap addI)
+      . f
+
+-- | A function composed of variadic arguments that produces a value
+--   of type @m a@.
+class VariadicFunction f where
+
+  -- | The function (that produces a value of type @t@) that this
+  --   instance corresponds to.
+  type VarFnType f (m :: * -> *) a t
+
+  -- | This is used to distinguish between instances based upon
+  --   'AsIs' and 'AddInternal', as they have different intermediary result
+  --   types (i.e. they produce functions that result in @m
+  --   (ResultType f m a)@.
+  type ResultType f (m :: * -> *) a
+
+  wrapVFn :: (MonadLevel m) => Proxy# f
+                               -> (Unwrapper m a (VarFnType f m a (LowerMonadValue m a)))
+                               -> VarFnType f m a (m a)
+
+  applyVFn :: (MonadLevel m) => Proxy# f
+              -> (VarFnTypeLower f m a (LowerMonad m (ResultType f m a)))
+              -> Unwrapper m a (VarFnType f m a (LowerMonadValue m a))
+
+type VarFnTypeLower f (m :: * -> *) a t = VarFnType f (LowerMonad m) (InnerValue m a) t
+
+-- | For use with functions that deal primarily with lowering monadic
+--   values and then manipulate them rather than creating new values.
+--   At each stage during the transformer stack, the result is of the
+--   form @LowerMonad m (InnerValue m a)@.
+data AsIs va
+
+instance (VariadicArg va) => VariadicFunction (AsIs va) where
+  type VarFnType (AsIs va) m a t = VariadicType va m a -> t
+  type ResultType (AsIs va) m a = InnerValue m a
+
+  wrapVFn _ = addThirdArg wrap
+
+  applyVFn _ f = \ unwrap addI -> \ va -> f (lowerVArg (proxy# :: Proxy# va) va unwrap addI)
+
+-- | For use with functions that produce a monadic value at the level
+--   of the satisfying monad and thus need to have internal state
+--   added before being lifted to the next level of the transformer
+--   stack.
+data AddInternal va
+
+instance (VariadicArg va) => VariadicFunction (AddInternal va) where
+  type VarFnType (AddInternal va) m a t = VariadicType va m a -> t
+  type ResultType (AddInternal va) m a = a
+
+  wrapVFn _ = addThirdArg wrap
+
+  applyVFn _ f = \ unwrap addI -> \ va -> addI $ f (lowerVArg (proxy# :: Proxy# va) va unwrap addI)
+
+instance (VariadicArg va, VariadicFunction vf) => VariadicFunction (Func va vf) where
+  type VarFnType (Func va vf) m a t = (VariadicType va m a) -> VarFnType vf m a t
+  type ResultType (Func va vf) m a = ResultType vf m a
+
+  wrapVFn _ = addThirdArg (wrapVFn (proxy# :: Proxy# vf))
+
+  applyVFn _ f = \ unwrap addI -> \ va ->
+    applyVFn (proxy# :: Proxy# vf) (f (lowerVArg (proxy# :: Proxy# va) va unwrap addI)) unwrap addI
+
+addThirdArg :: ((a -> b -> c) -> d) -> (a -> b -> e -> c) -> e -> d
+addThirdArg f g x = f (\ a b -> g a b x)
