@@ -103,10 +103,14 @@ class (MonadTower m, MonadTower (LowerMonad m)
   type AllConstraintsThrough m :: Bool
   type AllConstraintsThrough m = True
 
-  wrap :: ( ( m a -> LowerMonad m (InnerValue m a))
-              -> (LowerMonad m a -> LowerMonad m (InnerValue m a))
-              -> LowerMonad m (InnerValue m a))
+  wrap :: (Unwrapper m a (LowerMonadValue m a))
            -> m a
+
+type LowerMonadValue m a = LowerMonad m (InnerValue m a)
+
+type Unwrapper m a t =    (m a -> LowerMonadValue m a)
+                       -> (LowerMonad m a -> LowerMonadValue m a)
+                       -> t
 
 -- -----------------------------------------------------------------------------
 
