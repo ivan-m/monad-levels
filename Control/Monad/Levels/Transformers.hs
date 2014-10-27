@@ -1,6 +1,5 @@
 {-# LANGUAGE ConstraintKinds, DataKinds, FlexibleContexts, FlexibleInstances,
-             MagicHash, MultiParamTypeClasses, ScopedTypeVariables, TypeFamilies
-             #-}
+             MultiParamTypeClasses, ScopedTypeVariables, TypeFamilies #-}
 
 {- |
    Module      : Control.Monad.Levels.Transformers
@@ -55,7 +54,7 @@ type family IsTransformer (t :: (* -> *) -> * -> *) (m :: * -> *) where
   IsTransformer t m     = False
 
 liftT :: (CanLiftTransformer t m) => TransformedMonad t m a -> m a
-liftT m = lower (proxy# :: Proxy# (HasTransformer_ t)) (_liftT m)
+liftT m = lower (Proxy :: Proxy (HasTransformer_ t)) (_liftT m)
 
 -- -----------------------------------------------------------------------------
 -- ContT and ListT instances

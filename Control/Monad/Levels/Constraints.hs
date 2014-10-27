@@ -1,5 +1,5 @@
 {-# LANGUAGE ConstraintKinds, DataKinds, FlexibleContexts, FlexibleInstances,
-             KindSignatures, MagicHash, MultiParamTypeClasses, RankNTypes,
+             KindSignatures, MultiParamTypeClasses, RankNTypes,
              ScopedTypeVariables, TypeFamilies, TypeOperators,
              UndecidableInstances #-}
 
@@ -19,15 +19,14 @@ module Control.Monad.Levels.Constraints
        , SatMonad
        , lower
          -- * Re-exported for convenience
-       , Proxy#
-       , proxy#
+       , Proxy(..)
        ) where
 
 import Control.Monad.Levels.ConstraintPassing
 import Control.Monad.Levels.Definitions
 
-import GHC.Exts (Constraint)
-import GHC.Prim (Proxy#, proxy#)
+import Data.Proxy (Proxy (..))
+import GHC.Exts   (Constraint)
 
 -- -----------------------------------------------------------------------------
 
@@ -35,7 +34,7 @@ data Nat = Zero | Suc Nat
 
 class (MonadTower m) => SatisfyConstraint_ (n :: Nat) (c :: (* -> *) -> Constraint) m where
 
-  _lower :: Proxy# n -> Proxy# c -> SatMonad c m a -> m a
+  _lower :: Proxy n -> Proxy c -> SatMonad c m a -> m a
 
 instance (MonadTower m, c m, m ~ SatMonad c m) => SatisfyConstraint_ Zero c m where
 
@@ -45,7 +44,7 @@ instance (ConstraintCanPassThrough c m, SatisfyConstraint_ n c (LowerMonad m)
          , SatMonad c m ~ SatMonad c (LowerMonad m))
          => SatisfyConstraint_ (Suc n) c m where
 
-  _lower _ c m = wrap (\ _unwrap addI -> addI (_lower (proxy# :: Proxy# n) c m))
+  _lower _ c m = wrap (\ _unwrap addI -> addI (_lower (Proxy :: Proxy n) c m))
 
 
 type SatisfyConstraint c m = ( SatisfyConstraint_ (FindSatisfied c m) c m
@@ -56,8 +55,8 @@ type SatisfyConstraint c m = ( SatisfyConstraint_ (FindSatisfied c m) c m
                              , BaseMonad (SatMonad c m) ~ BaseMonad m)
 
 lower :: forall c m a. (SatisfyConstraint c m) =>
-         Proxy# (c :: (* -> *) -> Constraint) -> SatMonad c m a -> m a
-lower  p m = _lower (proxy# :: Proxy# (FindSatisfied c m)) p (m :: SatMonad c m a)
+         Proxy (c :: (* -> *) -> Constraint) -> SatMonad c m a -> m a
+lower  p m = _lower (Proxy :: Proxy (FindSatisfied c m)) p (m :: SatMonad c m a)
 
 -- -----------------------------------------------------------------------------
 
@@ -100,7 +99,7 @@ class VariadicArg v where
   --   monad @(m a)@.
   type VariadicType v (m :: * -> *) a
 
-  lowerVArg :: (MonadLevel m) => Proxy# v
+  lowerVArg :: (MonadLevel m) => Proxy v
                               -> VariadicType v m a
                               -> Unwrapper m a (VariadicType v (LowerMonad m) (InnerValue m a))
 
@@ -128,8 +127,14 @@ instance (VariadicArg va) => VariadicArg (Func b va) where
   type VariadicType (Func b va) m a = b -> VariadicType va m a
 
   lowerVArg _ f unwrap addI
-    = (\ v -> lowerVArg (proxy# :: Proxy# va) v unwrap addI)
+    = (\ v -> lowerVArg (Proxy :: Proxy va) v unwrap addI)
       . f
+
+wrapVariadic :: forall f m a. (VariadicFunction f, MonadLevel m) =>
+                Proxy f -> Proxy m -> Proxy a
+                -> VarFnTypeLower f m a (LowerMonad m (ResultType f m a))
+                -> VarFunction f m a
+wrapVariadic pvf pm pa f = uncurry wrapVFn (applyVFn pvf pm pa f)
 
 -- | A function composed of variadic arguments that produces a value
 --   of type @m a@.
@@ -145,15 +150,18 @@ class VariadicFunction f where
   --   (ResultType f m a)@.
   type ResultType f (m :: * -> *) a
 
-  wrapVFn :: (MonadLevel m) => Proxy# f
+  wrapVFn :: (MonadLevel m) => (Proxy f, Proxy m, Proxy a)
                                -> (Unwrapper m a (VarFnType f m a (LowerMonadValue m a)))
-                               -> VarFnType f m a (m a)
+                               -> VarFunction f m a
 
-  applyVFn :: (MonadLevel m) => Proxy# f
+  applyVFn :: forall m a. (MonadLevel m) => Proxy f -> Proxy m -> Proxy a
               -> (VarFnTypeLower f m a (LowerMonad m (ResultType f m a)))
-              -> Unwrapper m a (VarFnType f m a (LowerMonadValue m a))
+              -> ((Proxy f, Proxy m, Proxy a)
+                 , Unwrapper m a (VarFnType f m a (LowerMonadValue m a)))
 
 type VarFnTypeLower f (m :: * -> *) a t = VarFnType f (LowerMonad m) (InnerValue m a) t
+
+type VarFunction f m a = VarFnType f m a (m a)
 
 -- | For use with functions that deal primarily with lowering monadic
 --   values and then manipulate them rather than creating new values.
@@ -167,7 +175,7 @@ instance (VariadicArg va) => VariadicFunction (AsIs va) where
 
   wrapVFn _ = addThirdArg wrap
 
-  applyVFn _ f = \ unwrap addI -> \ va -> f (lowerVArg (proxy# :: Proxy# va) va unwrap addI)
+  applyVFn pf pm pa f = ((pf,pm,pa), \ unwrap addI -> \ va -> f (lowerVArg (Proxy :: Proxy va) va unwrap addI))
 
 -- | For use with functions that produce a monadic value at the level
 --   of the satisfying monad and thus need to have internal state
@@ -181,16 +189,22 @@ instance (VariadicArg va) => VariadicFunction (AddInternal va) where
 
   wrapVFn _ = addThirdArg wrap
 
-  applyVFn _ f = \ unwrap addI -> \ va -> addI $ f (lowerVArg (proxy# :: Proxy# va) va unwrap addI)
+  applyVFn pf pm pa f = ( (pf,pm,pa)
+                        , \ unwrap addI -> \ va -> addI $ f (lowerVArg (Proxy :: Proxy va) va unwrap addI))
 
 instance (VariadicArg va, VariadicFunction vf) => VariadicFunction (Func va vf) where
-  type VarFnType (Func va vf) m a t = (VariadicType va m a) -> VarFnType vf m a t
-  type ResultType (Func va vf) m a = ResultType vf m a
+  type VarFnType  (Func va vf) m a t = (VariadicType va m a) -> VarFnType vf m a t
+  type ResultType (Func va vf) m a   = ResultType vf m a
 
-  wrapVFn _ = addThirdArg (wrapVFn (proxy# :: Proxy# vf))
+  wrapVFn (_,pm,pa) = addThirdArg (wrapVFn (Proxy :: Proxy vf, pm, pa))
 
-  applyVFn _ f = \ unwrap addI -> \ va ->
-    applyVFn (proxy# :: Proxy# vf) (f (lowerVArg (proxy# :: Proxy# va) va unwrap addI)) unwrap addI
+  applyVFn pf pm pa f = ( (pf, pm, pa)
+                        , \ unwrap addI -> \ va ->
+                            snd (applyVFn (Proxy :: Proxy vf) pm pa
+                                          (f (lowerVArg (Proxy :: Proxy va) va unwrap addI)))
+                                unwrap
+                                addI
+                        )
 
 addThirdArg :: ((a -> b -> c) -> d) -> (a -> b -> e -> c) -> e -> d
 addThirdArg f g x = f (\ a b -> g a b x)

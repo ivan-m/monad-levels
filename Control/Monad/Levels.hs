@@ -1,4 +1,4 @@
-{-# LANGUAGE ConstraintKinds, DataKinds, FlexibleContexts, MagicHash,
+{-# LANGUAGE ConstraintKinds, DataKinds, FlexibleContexts,
              MultiParamTypeClasses, PolyKinds, RankNTypes, ScopedTypeVariables,
              TypeFamilies, UndecidableInstances #-}
 
@@ -50,7 +50,7 @@ type family SameMonad (m :: * -> *) (n :: * -> *) where
   SameMonad m n = False
 
 liftBase :: (HasBaseMonad m) => BaseMonad m a -> m a
-liftBase m = lower (proxy# :: Proxy# IsBaseMonad) m
+liftBase m = lower (Proxy :: Proxy IsBaseMonad) m
 {-# INLINE liftBase #-}
 
 type BaseMonadOf b m = (HasBaseMonad m, BaseMonad m ~ b, b ~ BaseMonad m)
