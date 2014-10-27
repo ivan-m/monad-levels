@@ -35,7 +35,7 @@ data Nat = Zero | Suc Nat
 
 class (MonadTower m) => SatisfyConstraint_ (n :: Nat) (c :: (* -> *) -> Constraint) m where
 
-  _lower :: Proxy# n -> Proxy# c ->  SatMonad c m a -> m a
+  _lower :: Proxy# n -> Proxy# c -> SatMonad c m a -> m a
 
 instance (MonadTower m, c m, m ~ SatMonad c m) => SatisfyConstraint_ Zero c m where
 
