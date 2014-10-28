@@ -1,5 +1,5 @@
 {-# LANGUAGE ConstraintKinds, DataKinds, FlexibleContexts, FlexibleInstances,
-             KindSignatures, MultiParamTypeClasses, RankNTypes,
+             KindSignatures, MultiParamTypeClasses, PolyKinds, RankNTypes,
              ScopedTypeVariables, TypeFamilies, TypeOperators,
              UndecidableInstances #-}
 
@@ -65,7 +65,7 @@ type family ConstraintSatisfied (c :: (* -> *) -> Constraint) (m :: * -> *) :: B
 type TrySatisfy (c :: (* -> *) -> Constraint) (m :: (* -> *)) = TrySatisfy' c (BaseMonad m) m
 
 type family TrySatisfy' (c :: (* -> *) -> Constraint) (b :: (* -> *)) (m :: (* -> *)) :: [(Bool, * -> *)] where
-  TrySatisfy' c b b = '[ '(ConstraintSatisfied c b, b) ]
+  TrySatisfy' c b b = '(ConstraintSatisfied c b, b) ': '[]
   TrySatisfy' c b m = '(ConstraintSatisfied c m, m) ': TrySatisfy' c b (LowerMonad m)
 
 type family FindTrue (bms :: [(Bool, * -> *)]) :: Nat where
@@ -74,12 +74,20 @@ type family FindTrue (bms :: [(Bool, * -> *)]) :: Nat where
 
 type FindSatisfied (c :: (* -> *) -> Constraint) (m :: * -> *) = FindTrue (TrySatisfy c m)
 
-type family FindSat (bms :: [(Bool, * -> *)]) :: * -> * where
+type family FindSat (bms :: [(Bool, k)]) :: k where
   FindSat ('(True,  m) ': t) = m
   FindSat ('(False, m) ': t) = FindSat t
 
 -- | The Monad in the tower that satisfies the provided constraint.
 type SatMonad (c :: (* -> *) -> Constraint) (m :: * -> *) = FindSat (TrySatisfy c m)
+
+type ValueAt (c :: (* -> *) -> Constraint) (m :: (* -> *)) a = ValueAt' c (BaseMonad m) m a
+
+type family ValueAt' (c :: (* -> *) -> Constraint) (b :: (* -> *)) (m :: (* -> *)) a :: [(Bool, *)] where
+  ValueAt' c b b a = '(ConstraintSatisfied c b, a) ': ' []
+  ValueAt' c b m a = '(ConstraintSatisfied c m, a) ': ValueAt' c b (LowerMonad m) (InnerValue m a)
+
+type SatValue (c :: (* -> *) -> Constraint) (m :: * -> *) a = FindSat (ValueAt c m a)
 
 -- -----------------------------------------------------------------------------
 
@@ -105,7 +113,7 @@ class VariadicArg v where
 
 -- | A constant type that does not depend upon the current monadic
 --   context.  That is, @Const b@ corresponds to just @b@.
-data Const b
+data Const (b :: *)
 
 instance VariadicArg (Const b) where
   type VariadicType (Const b) m a = b
@@ -121,7 +129,7 @@ instance VariadicArg MonadicValue where
   lowerVArg _ m unwrap _ = unwrap m
 
 -- | Represents the function @a -> b@.
-data Func a b
+data Func (a :: *) (b :: *)
 
 instance (VariadicArg va) => VariadicArg (Func b va) where
   type VariadicType (Func b va) m a = b -> VariadicType va m a
