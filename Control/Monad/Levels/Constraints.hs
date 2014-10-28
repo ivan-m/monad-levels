@@ -130,12 +130,6 @@ instance (VariadicArg va) => VariadicArg (Func b va) where
     = (\ v -> lowerVArg (Proxy :: Proxy va) v unwrap addI)
       . f
 
-wrapVariadic :: forall f m a. (VariadicFunction f, MonadLevel m) =>
-                Proxy f -> Proxy m -> Proxy a
-                -> VarFnTypeLower f m a (LowerMonad m (ResultType f m a))
-                -> VarFunction f m a
-wrapVariadic pvf pm pa f = uncurry wrapVFn (applyVFn pvf pm pa f)
-
 -- | A function composed of variadic arguments that produces a value
 --   of type @m a@.
 class VariadicFunction f where
@@ -150,18 +144,15 @@ class VariadicFunction f where
   --   (ResultType f m a)@.
   type ResultType f (m :: * -> *) a
 
-  wrapVFn :: (MonadLevel m) => (Proxy f, Proxy m, Proxy a)
-                               -> (Unwrapper m a (VarFnType f m a (LowerMonadValue m a)))
-                               -> VarFunction f m a
-
-  applyVFn :: forall m a. (MonadLevel m) => Proxy f -> Proxy m -> Proxy a
-              -> (VarFnTypeLower f m a (LowerMonad m (ResultType f m a)))
-              -> ((Proxy f, Proxy m, Proxy a)
-                 , Unwrapper m a (VarFnType f m a (LowerMonadValue m a)))
+  applyVFn :: (MonadLevel m) => Proxy f
+              -> Unwrapper m a (VarFnTypeLower f m a (LowerMonad m (ResultType f m a)))
+              -> VarFunction f m a
 
 type VarFnTypeLower f (m :: * -> *) a t = VarFnType f (LowerMonad m) (InnerValue m a) t
 
 type VarFunction f m a = VarFnType f m a (m a)
+
+type VarFunctionResult f m a = VarFnType f m a (m (ResultType f m a))
 
 -- | For use with functions that deal primarily with lowering monadic
 --   values and then manipulate them rather than creating new values.
@@ -173,9 +164,7 @@ instance (VariadicArg va) => VariadicFunction (AsIs va) where
   type VarFnType (AsIs va) m a t = VariadicType va m a -> t
   type ResultType (AsIs va) m a = InnerValue m a
 
-  wrapVFn _ = addThirdArg wrap
-
-  applyVFn pf pm pa f = ((pf,pm,pa), \ unwrap addI -> \ va -> f (lowerVArg (Proxy :: Proxy va) va unwrap addI))
+  applyVFn _ f va = wrap (\ unwrap addI -> f unwrap addI (lowerVArg (Proxy :: Proxy va) va unwrap addI))
 
 -- | For use with functions that produce a monadic value at the level
 --   of the satisfying monad and thus need to have internal state
@@ -187,24 +176,11 @@ instance (VariadicArg va) => VariadicFunction (AddInternal va) where
   type VarFnType (AddInternal va) m a t = VariadicType va m a -> t
   type ResultType (AddInternal va) m a = a
 
-  wrapVFn _ = addThirdArg wrap
-
-  applyVFn pf pm pa f = ( (pf,pm,pa)
-                        , \ unwrap addI -> \ va -> addI $ f (lowerVArg (Proxy :: Proxy va) va unwrap addI))
+  applyVFn _ f va = wrap (\ unwrap addI -> addI $ f unwrap addI (lowerVArg (Proxy :: Proxy va) va unwrap addI))
 
 instance (VariadicArg va, VariadicFunction vf) => VariadicFunction (Func va vf) where
   type VarFnType  (Func va vf) m a t = (VariadicType va m a) -> VarFnType vf m a t
   type ResultType (Func va vf) m a   = ResultType vf m a
 
-  wrapVFn (_,pm,pa) = addThirdArg (wrapVFn (Proxy :: Proxy vf, pm, pa))
-
-  applyVFn pf pm pa f = ( (pf, pm, pa)
-                        , \ unwrap addI -> \ va ->
-                            snd (applyVFn (Proxy :: Proxy vf) pm pa
-                                          (f (lowerVArg (Proxy :: Proxy va) va unwrap addI)))
-                                unwrap
-                                addI
-                        )
-
-addThirdArg :: ((a -> b -> c) -> d) -> (a -> b -> e -> c) -> e -> d
-addThirdArg f g x = f (\ a b -> g a b x)
+  applyVFn _ f va = applyVFn (Proxy :: Proxy vf)
+                             (\ unwrap addI -> f unwrap addI (lowerVArg (Proxy :: Proxy va) va unwrap addI))
