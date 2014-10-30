@@ -146,49 +146,25 @@ class VariadicFunction f where
   --   instance corresponds to.
   type VarFnType f (m :: * -> *) a t
 
-  -- | This is used to distinguish between instances based upon
-  --   'AsIs' and 'AddInternal', as they have different intermediary result
-  --   types (i.e. they produce functions that result in @m
-  --   (ResultType f m a)@.
-  type ResultType f (m :: * -> *) a
-
   applyVFn :: (MonadLevel m) => Proxy f
-              -> Unwrapper m a (VarFnTypeLower f m a (LowerMonad m (ResultType f m a)))
+              -> Unwrapper m a (VarFnTypeLower f m a)
               -> VarFunction f m a
 
-type VarFnTypeLower f (m :: * -> *) a t = VarFnType f (LowerMonad m) (InnerValue m a) t
+type VarFnTypeLower f (m :: * -> *) a = VarFunctionResult f (LowerMonad m) (InnerValue m a)
 
 type VarFunction f m a = VarFnType f m a (m a)
 
-type VarFunctionResult f m a = VarFnType f m a (m (ResultType f m a))
+type VarFunctionResult f m a = VarFnType f m a (m a)
 
--- | For use with functions that deal primarily with lowering monadic
---   values and then manipulate them rather than creating new values.
---   At each stage during the transformer stack, the result is of the
---   form @LowerMonad m (InnerValue m a)@.
-data AsIs va
+data MkVarFn va
 
-instance (VariadicArg va) => VariadicFunction (AsIs va) where
-  type VarFnType (AsIs va) m a t = VariadicType va m a -> t
-  type ResultType (AsIs va) m a = InnerValue m a
+instance (VariadicArg va) => VariadicFunction (MkVarFn va) where
+  type VarFnType (MkVarFn va) m a t = VariadicType va m a -> t
 
   applyVFn _ f va = wrap (\ unwrap addI -> f unwrap addI (lowerVArg (Proxy :: Proxy va) va unwrap addI))
 
--- | For use with functions that produce a monadic value at the level
---   of the satisfying monad and thus need to have internal state
---   added before being lifted to the next level of the transformer
---   stack.
-data AddInternal va
-
-instance (VariadicArg va) => VariadicFunction (AddInternal va) where
-  type VarFnType (AddInternal va) m a t = VariadicType va m a -> t
-  type ResultType (AddInternal va) m a = a
-
-  applyVFn _ f va = wrap (\ unwrap addI -> addI $ f unwrap addI (lowerVArg (Proxy :: Proxy va) va unwrap addI))
-
 instance (VariadicArg va, VariadicFunction vf) => VariadicFunction (Func va vf) where
   type VarFnType  (Func va vf) m a t = (VariadicType va m a) -> VarFnType vf m a t
-  type ResultType (Func va vf) m a   = ResultType vf m a
 
   applyVFn _ f va = applyVFn (Proxy :: Proxy vf)
                              (\ unwrap addI -> f unwrap addI (lowerVArg (Proxy :: Proxy va) va unwrap addI))
