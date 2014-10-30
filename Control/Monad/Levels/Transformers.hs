@@ -54,7 +54,7 @@ type family IsTransformer (t :: (* -> *) -> * -> *) (m :: * -> *) where
   IsTransformer t m     = False
 
 liftT :: (CanLiftTransformer t m) => TransformedMonad t m a -> m a
-liftT m = lower (Proxy :: Proxy (HasTransformer_ t)) (_liftT m)
+liftT m = liftSat (Proxy :: Proxy (HasTransformer_ t)) (_liftT m)
 
 -- -----------------------------------------------------------------------------
 -- ContT and ListT instances

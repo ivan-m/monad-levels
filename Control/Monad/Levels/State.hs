@@ -41,7 +41,7 @@ type family SameState s m where
 type HasState s m = SatisfyConstraint (HasState_ s) m
 
 state :: forall m s a. (HasState s m) => (s -> (a,s)) -> m a
-state = lower (Proxy :: Proxy (HasState_ s)) . _state
+state = liftSat (Proxy :: Proxy (HasState_ s)) . _state
 
 get :: (HasState s m) => m s
 get = state (\s -> (s,s))

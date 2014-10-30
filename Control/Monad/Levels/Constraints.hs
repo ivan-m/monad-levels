@@ -17,7 +17,7 @@ module Control.Monad.Levels.Constraints
        ( SatisfyConstraint
        , ConstraintSatisfied
        , SatMonad
-       , lower
+       , liftSat
          -- * Re-exported for convenience
        , Proxy(..)
        ) where
@@ -34,18 +34,17 @@ data Nat = Zero | Suc Nat
 
 class (MonadTower m) => SatisfyConstraint_ (n :: Nat) (c :: (* -> *) -> Constraint) m where
 
-  _lower :: Proxy n -> Proxy c -> SatMonad c m a -> m a
+  _liftSat :: Proxy n -> Proxy c -> SatMonad c m a -> m a
 
 instance (MonadTower m, c m, m ~ SatMonad c m) => SatisfyConstraint_ Zero c m where
 
-  _lower _ _ m = m
+  _liftSat _ _ m = m
 
 instance (ConstraintCanPassThrough c m, SatisfyConstraint_ n c (LowerMonad m)
          , SatMonad c m ~ SatMonad c (LowerMonad m))
          => SatisfyConstraint_ (Suc n) c m where
 
-  _lower _ c m = wrap (\ _unwrap addI -> addI (_lower (Proxy :: Proxy n) c m))
-
+  _liftSat _ c m = wrap (\ _unwrap addI -> addI (_liftSat (Proxy :: Proxy n) c m))
 
 type SatisfyConstraint c m = ( SatisfyConstraint_ (FindSatisfied c m) c m
                              , c (SatMonad c m)
@@ -54,9 +53,9 @@ type SatisfyConstraint c m = ( SatisfyConstraint_ (FindSatisfied c m) c m
                              -- the specified one.
                              , BaseMonad (SatMonad c m) ~ BaseMonad m)
 
-lower :: forall c m a. (SatisfyConstraint c m) =>
+liftSat :: forall c m a. (SatisfyConstraint c m) =>
          Proxy (c :: (* -> *) -> Constraint) -> SatMonad c m a -> m a
-lower  p m = _lower (Proxy :: Proxy (FindSatisfied c m)) p (m :: SatMonad c m a)
+liftSat  p m = _liftSat (Proxy :: Proxy (FindSatisfied c m)) p m
 
 -- -----------------------------------------------------------------------------
 
