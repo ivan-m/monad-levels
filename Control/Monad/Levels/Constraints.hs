@@ -17,9 +17,21 @@ module Control.Monad.Levels.Constraints
        ( SatisfyConstraint
        , ConstraintSatisfied
        , SatMonad
+       , SatMonadValue
        , liftSat
+       , lowerSat
+       , lowerFunction
          -- * Re-exported for convenience
        , Proxy(..)
+         -- * Variadic functions
+       , MkVarFn
+       , Func
+       , MonadicValue
+       , Const
+       , VariadicArg
+       , VariadicType
+       , VariadicFunction
+       , VarFunction
        ) where
 
 import Control.Monad.Levels.ConstraintPassing
@@ -34,19 +46,51 @@ data Nat = Zero | Suc Nat
 
 class (MonadTower m) => SatisfyConstraint_ (n :: Nat) (c :: (* -> *) -> Constraint) m where
 
-  _liftSat :: Proxy n -> Proxy c -> SatMonad c m a -> m a
+  type SatMonad_ n c m :: * -> *
 
-instance (MonadTower m, c m, m ~ SatMonad c m) => SatisfyConstraint_ Zero c m where
+  type SatValue_ n c m a
+
+  _liftSat :: Proxy n -> Proxy c -> SatMonad_ n c m a -> m a
+
+  _lower :: (VariadicFunction f) => Proxy n -> Proxy c -> Proxy f -> Proxy m -> Proxy a
+                                    -> VarFunction f (SatMonad_ n c m) (SatValue_ n c m a)
+                                    -> VarFunction f m a
+
+instance (MonadTower m, c m) => SatisfyConstraint_ Zero c m where
+
+  type SatMonad_ Zero c m   = m
+
+  type SatValue_ Zero c m a = a
 
   _liftSat _ _ m = m
 
-instance (ConstraintCanPassThrough c m, SatisfyConstraint_ n c (LowerMonad m)
-         , SatMonad c m ~ SatMonad c (LowerMonad m))
+  _lower _n _c _vf _m _a f = f
+
+instance (ConstraintCanPassThrough c m, SatisfyConstraint_ n c (LowerMonad m))
          => SatisfyConstraint_ (Suc n) c m where
+
+  type SatMonad_ (Suc n) c m   = SatMonad_ n c (LowerMonad m)
+
+  type SatValue_ (Suc n) c m a = SatValue_ n c (LowerMonad m) (InnerValue m a)
 
   _liftSat _ c m = wrap (\ _unwrap addI -> addI (_liftSat (Proxy :: Proxy n) c m))
 
-type SatisfyConstraint c m = ( SatisfyConstraint_ (FindSatisfied c m) c m
+  _lower _ c vf m a f = applyVFn vf m a (\ _unwrap _addI -> _lower (Proxy :: Proxy n)
+                                                                   c
+                                                                   vf
+                                                                   (lowerP m)
+                                                                   (innerP m a)
+                                                                   f)
+
+lowerP :: (MonadLevel m) => Proxy m -> Proxy (LowerMonad m)
+lowerP _ = Proxy
+{-# INLINE lowerP #-}
+
+innerP :: (MonadLevel m) => Proxy m -> Proxy a -> Proxy (InnerValue m a)
+innerP _ _ = Proxy
+{-# INLINE innerP #-}
+
+type SatisfyConstraint c m = ( SatisfyConstraint_ (SatDepth c m) c m
                              , c (SatMonad c m)
                              -- Best current way of stating that the
                              -- satisfying monad is a lower level of
@@ -54,8 +98,24 @@ type SatisfyConstraint c m = ( SatisfyConstraint_ (FindSatisfied c m) c m
                              , BaseMonad (SatMonad c m) ~ BaseMonad m)
 
 liftSat :: forall c m a. (SatisfyConstraint c m) =>
-         Proxy (c :: (* -> *) -> Constraint) -> SatMonad c m a -> m a
-liftSat  p m = _liftSat (Proxy :: Proxy (FindSatisfied c m)) p m
+           Proxy c -> SatMonad c m a -> m a
+liftSat p m = _liftSat (Proxy :: Proxy (SatDepth c m)) p m
+
+type SatAtLevel n c f m a = VarFunction f (SatMonad_ n c m) (SatValue_ n c m a)
+
+type SatFunction c f m a = SatAtLevel (SatDepth c m) c f m a
+
+type SatMonadValue c m a = SatMonad_ (SatDepth c m) c m (SatValue_ (SatDepth c m) c m a)
+
+lowerSat :: forall c f m a. (SatisfyConstraint c m, VariadicFunction f) =>
+            Proxy c -> Proxy f -> Proxy m -> Proxy a
+            -> SatFunction c f m a -> VarFunction f m a
+lowerSat c vf m a f = _lower (Proxy :: Proxy (SatDepth c m)) c vf m a f
+
+lowerFunction :: forall c m a. (SatisfyConstraint c m) => Proxy c
+                 -> (SatMonadValue c m a -> SatMonadValue c m a)
+                 -> m a -> m a
+lowerFunction c f = lowerSat c (Proxy :: Proxy (MkVarFn MonadicValue)) (Proxy :: Proxy m) (Proxy :: Proxy a) f
 
 -- -----------------------------------------------------------------------------
 
@@ -63,30 +123,18 @@ type family ConstraintSatisfied (c :: (* -> *) -> Constraint) (m :: * -> *) :: B
 
 type TrySatisfy (c :: (* -> *) -> Constraint) (m :: (* -> *)) = TrySatisfy' c (BaseMonad m) m
 
-type family TrySatisfy' (c :: (* -> *) -> Constraint) (b :: (* -> *)) (m :: (* -> *)) :: [(Bool, * -> *)] where
-  TrySatisfy' c b b = '(ConstraintSatisfied c b, b) ': '[]
-  TrySatisfy' c b m = '(ConstraintSatisfied c m, m) ': TrySatisfy' c b (LowerMonad m)
+type family TrySatisfy' (c :: (* -> *) -> Constraint) (b :: (* -> *)) (m :: (* -> *)) :: [Bool] where
+  TrySatisfy' c b b = ConstraintSatisfied c b ': '[]
+  TrySatisfy' c b m = ConstraintSatisfied c m ': TrySatisfy' c b (LowerMonad m)
 
-type family FindTrue (bms :: [(Bool, * -> *)]) :: Nat where
-  FindTrue ('(True,  m) ': t) = Zero
-  FindTrue ('(False, m) ': t) = Suc (FindTrue t)
+type family FindTrue (bms :: [Bool]) :: Nat where
+  FindTrue (True  ': t) = Zero
+  FindTrue (False ': t) = Suc (FindTrue t)
 
-type FindSatisfied (c :: (* -> *) -> Constraint) (m :: * -> *) = FindTrue (TrySatisfy c m)
-
-type family FindSat (bms :: [(Bool, k)]) :: k where
-  FindSat ('(True,  m) ': t) = m
-  FindSat ('(False, m) ': t) = FindSat t
+type SatDepth (c :: (* -> *) -> Constraint) (m :: * -> *) = FindTrue (TrySatisfy c m)
 
 -- | The Monad in the tower that satisfies the provided constraint.
-type SatMonad (c :: (* -> *) -> Constraint) (m :: * -> *) = FindSat (TrySatisfy c m)
-
-type ValueAt (c :: (* -> *) -> Constraint) (m :: (* -> *)) a = ValueAt' c (BaseMonad m) m a
-
-type family ValueAt' (c :: (* -> *) -> Constraint) (b :: (* -> *)) (m :: (* -> *)) a :: [(Bool, *)] where
-  ValueAt' c b b a = '(ConstraintSatisfied c b, a) ': ' []
-  ValueAt' c b m a = '(ConstraintSatisfied c m, a) ': ValueAt' c b (LowerMonad m) (InnerValue m a)
-
-type SatValue (c :: (* -> *) -> Constraint) (m :: * -> *) a = FindSat (ValueAt c m a)
+type SatMonad (c :: (* -> *) -> Constraint) (m :: * -> *) = SatMonad_ (SatDepth c m) c m
 
 -- -----------------------------------------------------------------------------
 
@@ -156,10 +204,10 @@ data MkVarFn va
 instance (VariadicArg va) => VariadicFunction (MkVarFn va) where
   type VarFunction (MkVarFn va) m a = VariadicType va m a -> m a
 
-  applyVFn _ f va = wrap (\ unwrap addI -> f unwrap addI (lowerVArg (Proxy :: Proxy va) va unwrap addI))
+  applyVFn _ _ _ f va = wrap (\ unwrap addI -> f unwrap addI (lowerVArg (Proxy :: Proxy va) va unwrap addI))
 
 instance (VariadicArg va, VariadicFunction vf) => VariadicFunction (Func va vf) where
   type VarFunction  (Func va vf) m a = (VariadicType va m a) -> VarFunction vf m a
 
-  applyVFn _ f va = applyVFn (Proxy :: Proxy vf)
-                             (\ unwrap addI -> f unwrap addI (lowerVArg (Proxy :: Proxy va) va unwrap addI))
+  applyVFn _ m a f va = applyVFn (Proxy :: Proxy vf) m a
+                                 (\ unwrap addI -> f unwrap addI (lowerVArg (Proxy :: Proxy va) va unwrap addI))
