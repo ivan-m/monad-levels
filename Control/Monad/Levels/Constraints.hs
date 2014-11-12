@@ -143,27 +143,23 @@ class VariadicFunction f where
 
   -- | The function (that produces a value of type @t@) that this
   --   instance corresponds to.
-  type VarFnType f (m :: * -> *) a t
+  type VarFunction f (m :: * -> *) a
 
-  applyVFn :: (MonadLevel m) => Proxy f
-              -> Unwrapper m a (VarFnTypeLower f m a)
+  applyVFn :: (MonadLevel m) => Proxy f -> Proxy m -> Proxy a
+              -> Unwrapper m a (VarFunctionLower f m a)
               -> VarFunction f m a
 
-type VarFnTypeLower f (m :: * -> *) a = VarFunctionResult f (LowerMonad m) (InnerValue m a)
-
-type VarFunction f m a = VarFnType f m a (m a)
-
-type VarFunctionResult f m a = VarFnType f m a (m a)
+type VarFunctionLower f (m :: * -> *) a = VarFunction f (LowerMonad m) (InnerValue m a)
 
 data MkVarFn va
 
 instance (VariadicArg va) => VariadicFunction (MkVarFn va) where
-  type VarFnType (MkVarFn va) m a t = VariadicType va m a -> t
+  type VarFunction (MkVarFn va) m a = VariadicType va m a -> m a
 
   applyVFn _ f va = wrap (\ unwrap addI -> f unwrap addI (lowerVArg (Proxy :: Proxy va) va unwrap addI))
 
 instance (VariadicArg va, VariadicFunction vf) => VariadicFunction (Func va vf) where
-  type VarFnType  (Func va vf) m a t = (VariadicType va m a) -> VarFnType vf m a t
+  type VarFunction  (Func va vf) m a = (VariadicType va m a) -> VarFunction vf m a
 
   applyVFn _ f va = applyVFn (Proxy :: Proxy vf)
                              (\ unwrap addI -> f unwrap addI (lowerVArg (Proxy :: Proxy va) va unwrap addI))
