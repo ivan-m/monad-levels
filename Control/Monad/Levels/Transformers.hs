@@ -25,6 +25,7 @@ import Control.Monad.Levels.Definitions
 
 import           Control.Monad.Trans.Cont         (ContT)
 import           Control.Monad.Trans.List         (ListT)
+import           Control.Monad.Trans.Reader
 import qualified Control.Monad.Trans.State.Lazy   as LSt
 import qualified Control.Monad.Trans.State.Strict as SSt
 
@@ -65,3 +66,6 @@ instance (MonadLevel m) => ConstraintCanPassThrough (IsTransformer (LSt.StateT s
 
 instance (MonadLevel m) => ConstraintCanPassThrough (IsTransformer (SSt.StateT s)) (ContT r m)
 instance (MonadLevel m) => ConstraintCanPassThrough (IsTransformer (SSt.StateT s)) (ListT m)
+
+instance (MonadLevel m) => ConstraintCanPassThrough (IsTransformer (ReaderT r)) (ContT c m)
+instance (MonadLevel m) => ConstraintCanPassThrough (IsTransformer (ReaderT r)) (ListT m)

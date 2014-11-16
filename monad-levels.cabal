@@ -21,6 +21,7 @@ library
                      , Control.Monad.Levels.Constraints
                      , Control.Monad.Levels.Transformers
 
+                     , Control.Monad.Levels.Reader
                      , Control.Monad.Levels.State
 
   other-modules:       Control.Monad.Levels.Definitions
