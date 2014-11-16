@@ -41,9 +41,7 @@ type HasTransformer t m = ( SatisfyConstraint (IsTransformer t) m
 --   is on top.
 type TransformedMonad t m = SatMonad (IsTransformer t) m
 
-class (MonadLevel m, m ~ t (LowerMonad m), t (LowerMonad m) ~ m) => IsTransformer t m where
-  _liftT :: m a -> m a
-  _liftT m = m
+class (MonadLevel m, m ~ t (LowerMonad m), t (LowerMonad m) ~ m) => IsTransformer t m
 
 instance (MonadLevel m, m ~ t (LowerMonad m), t (LowerMonad m) ~ m) => IsTransformer t m
 
@@ -54,7 +52,7 @@ type family SameTransformer (t :: (* -> *) -> * -> *) (m :: * -> *) where
   SameTransformer t m     = False
 
 liftT :: (HasTransformer t m) => TransformedMonad t m a -> m a
-liftT m = liftSat (Proxy :: Proxy (IsTransformer t)) (_liftT m)
+liftT m = liftSat (Proxy :: Proxy (IsTransformer t)) m
 
 -- -----------------------------------------------------------------------------
 -- ContT and ListT instances
