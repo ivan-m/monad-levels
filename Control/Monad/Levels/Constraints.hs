@@ -158,6 +158,10 @@ class VariadicArg v where
                               -> VariadicType v m a
                               -> Unwrapper m a (VariadicType v (LowerMonad m) (InnerValue m a))
 
+  liftVArg :: (MonadLevel m) => Proxy v
+                             -> VariadicType v (LowerMonad m) (InnerValue m a)
+                             -> Unwrapper m a (VariadicType v m a)
+
 -- | A constant type that does not depend upon the current monadic
 --   context.  That is, @Const b@ corresponds to just @b@.
 data Const (b :: *)
@@ -167,6 +171,8 @@ instance VariadicArg (Const b) where
 
   lowerVArg _ b _ _ = b
 
+  liftVArg  _ b _ _ = b
+
 -- | Corresponds to @m a@.
 data MonadicValue
 
@@ -175,15 +181,29 @@ instance VariadicArg MonadicValue where
 
   lowerVArg _ m unwrap _ = unwrap m
 
+  liftVArg  _ m _      _ = wrap (\ _ _ -> m)
+
+-- Can't have a LiftVA instance for MonadicValue as we can't lift it
+-- (as we don't know what the outer monad would be, if there even is
+-- one).
+
 -- | Represents the function @a -> b@.
 data Func (a :: *) (b :: *)
 
-instance (VariadicArg va) => VariadicArg (Func b va) where
-  type VariadicType (Func b va) m a = b -> VariadicType va m a
+instance (VariadicArg va, VariadicArg vb) => VariadicArg (Func va vb) where
+  type VariadicType (Func va vb) m a = VariadicType va m a -> VariadicType vb m a
 
+  -- lower . f . lift
   lowerVArg _ f unwrap addI
-    = (\ v -> lowerVArg (Proxy :: Proxy va) v unwrap addI)
+    =   (\ v -> lowerVArg (Proxy :: Proxy vb) v unwrap addI)
       . f
+      . (\ v -> liftVArg  (Proxy :: Proxy va) v unwrap addI)
+
+  -- lift . f . lower
+  liftVArg _ f unwrap addI
+    =   (\ v -> liftVArg  (Proxy :: Proxy vb) v unwrap addI)
+      . f
+      . (\ v -> lowerVArg (Proxy :: Proxy va) v unwrap addI)
 
 -- | A function composed of variadic arguments that produces a value
 --   of type @m a@.
@@ -204,10 +224,12 @@ data MkVarFn va
 instance (VariadicArg va) => VariadicFunction (MkVarFn va) where
   type VarFunction (MkVarFn va) m a = VariadicType va m a -> m a
 
-  applyVFn _ _ _ f va = wrap (\ unwrap addI -> f unwrap addI (lowerVArg (Proxy :: Proxy va) va unwrap addI))
+  applyVFn _ _ _ f va = wrap (\ unwrap addI ->
+                                f unwrap addI (lowerVArg (Proxy :: Proxy va) va unwrap addI))
 
 instance (VariadicArg va, VariadicFunction vf) => VariadicFunction (Func va vf) where
   type VarFunction  (Func va vf) m a = (VariadicType va m a) -> VarFunction vf m a
 
   applyVFn _ m a f va = applyVFn (Proxy :: Proxy vf) m a
-                                 (\ unwrap addI -> f unwrap addI (lowerVArg (Proxy :: Proxy va) va unwrap addI))
+                                 (\ unwrap addI ->
+                                    f unwrap addI (lowerVArg (Proxy :: Proxy va) va unwrap addI))
