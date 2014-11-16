@@ -9,7 +9,7 @@ The oft-spouted problem with the standard monad transformer library
 a separate instance for each valid combination of transformer +
 typeclass.
 
-mtl: http://hackage.haskell.org/package/mtl
+[mtl]: http://hackage.haskell.org/package/mtl
 
 For end users, this isn't really a problem: after all, all the
 required instances have already been written for you!
