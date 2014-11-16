@@ -35,8 +35,11 @@ class (MonadTower m) => HasState_ s m where
 type instance ConstraintSatisfied (HasState_ s) m = SameState s m
 
 type family SameState s m where
-  SameState s (LSt.StateT s m) = True
-  SameState s m                = False
+  SameState s (LSt.StateT s m)    = True
+  SameState s (SSt.StateT s m)    = True
+  SameState s (LRWS.RWST r w s m) = True
+  SameState s (SRWS.RWST r w s m) = True
+  SameState s m                   = False
 
 type HasState s m = SatisfyConstraint (HasState_ s) m
 
