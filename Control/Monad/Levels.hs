@@ -24,7 +24,7 @@ module Control.Monad.Levels
        , BaseMonadOf
        , liftIO
          -- * Lifting from a specific transformer
-       , CanLiftTransformer
+       , HasTransformer
        , TransformedMonad
        , liftT
        ) where

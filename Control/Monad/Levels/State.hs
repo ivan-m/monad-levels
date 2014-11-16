@@ -28,11 +28,11 @@ import           Data.Monoid                      (Monoid)
 
 -- -----------------------------------------------------------------------------
 
-class (MonadTower m) => HasState_ s m where
+class (MonadTower m) => IsState s m where
 
   _state :: (s -> (a,s)) -> m a
 
-type instance ConstraintSatisfied (HasState_ s) m = SameState s m
+type instance ConstraintSatisfied (IsState s) m = SameState s m
 
 type family SameState s m where
   SameState s (LSt.StateT s m)    = True
@@ -41,10 +41,10 @@ type family SameState s m where
   SameState s (SRWS.RWST r w s m) = True
   SameState s m                   = False
 
-type HasState s m = SatisfyConstraint (HasState_ s) m
+type HasState s m = SatisfyConstraint (IsState s) m
 
 state :: forall m s a. (HasState s m) => (s -> (a,s)) -> m a
-state = liftSat (Proxy :: Proxy (HasState_ s)) . _state
+state = liftSat (Proxy :: Proxy (IsState s)) . _state
 
 get :: (HasState s m) => m s
 get = state (\s -> (s,s))
@@ -60,24 +60,24 @@ modify f = state (\ s -> ((), f s))
 
 -- -----------------------------------------------------------------------------
 
-instance (MonadTower m) => HasState_ s (LSt.StateT s m) where
+instance (MonadTower m) => IsState s (LSt.StateT s m) where
 
   _state = LSt.state
 
-instance (MonadTower m) => HasState_ s (SSt.StateT s m) where
+instance (MonadTower m) => IsState s (SSt.StateT s m) where
 
   _state = SSt.state
 
-instance (MonadTower m, Monoid w) => HasState_ s (LRWS.RWST r w s m) where
+instance (MonadTower m, Monoid w) => IsState s (LRWS.RWST r w s m) where
 
   _state = LRWS.state
 
-instance (MonadTower m, Monoid w) => HasState_ s (SRWS.RWST r w s m) where
+instance (MonadTower m, Monoid w) => IsState s (SRWS.RWST r w s m) where
 
   _state = SRWS.state
 
 -- -----------------------------------------------------------------------------
 -- Dealing with ContT and ListT
 
-instance (MonadTower m) => ConstraintCanPassThrough (HasState_ s) (ContT r m)
-instance (MonadTower m) => ConstraintCanPassThrough (HasState_ s) (ListT m)
+instance (MonadTower m) => ConstraintCanPassThrough (IsState s) (ContT r m)
+instance (MonadTower m) => ConstraintCanPassThrough (IsState s) (ListT m)

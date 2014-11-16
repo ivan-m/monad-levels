@@ -12,11 +12,11 @@
 
  -}
 module Control.Monad.Levels.Transformers
-       ( CanLiftTransformer
+       ( HasTransformer
        , TransformedMonad
        , liftT
          -- * Exported for use with custom instances
-       , HasTransformer_
+       , IsTransformer
        ) where
 
 import Control.Monad.Levels.ConstraintPassing
@@ -33,28 +33,28 @@ import qualified Control.Monad.Trans.State.Strict as SSt
 -- | Unlike 'HasBaseMonad', this is not a universal constraint
 --   applicable to all 'MonadLevel' instances, as otherwise it can be
 --   used to bypass the lack of an allowed constraint.
-type CanLiftTransformer t m = ( SatisfyConstraint (HasTransformer_ t) m
-                              , MonadLevel (TransformedMonad t m)
-                              , TransformedMonad t m ~ t (LowerMonad (TransformedMonad t m)))
+type HasTransformer t m = ( SatisfyConstraint (IsTransformer t) m
+                          , MonadLevel (TransformedMonad t m)
+                          , TransformedMonad t m ~ t (LowerMonad (TransformedMonad t m)))
 
 -- | The sub-part of the monadic stack where the requested transformer
 --   is on top.
-type TransformedMonad t m = SatMonad (HasTransformer_ t) m
+type TransformedMonad t m = SatMonad (IsTransformer t) m
 
-class (MonadLevel m, m ~ t (LowerMonad m), t (LowerMonad m) ~ m) => HasTransformer_ t m where
+class (MonadLevel m, m ~ t (LowerMonad m), t (LowerMonad m) ~ m) => IsTransformer t m where
   _liftT :: m a -> m a
   _liftT m = m
 
-instance (MonadLevel m, m ~ t (LowerMonad m), t (LowerMonad m) ~ m) => HasTransformer_ t m
+instance (MonadLevel m, m ~ t (LowerMonad m), t (LowerMonad m) ~ m) => IsTransformer t m
 
-type instance ConstraintSatisfied (HasTransformer_ (t :: (* -> *) -> * -> *)) (m :: * -> *) = IsTransformer t m
+type instance ConstraintSatisfied (IsTransformer (t :: (* -> *) -> * -> *)) (m :: * -> *) = SameTransformer t m
 
-type family IsTransformer (t :: (* -> *) -> * -> *) (m :: * -> *) where
-  IsTransformer t (t m) = True
-  IsTransformer t m     = False
+type family SameTransformer (t :: (* -> *) -> * -> *) (m :: * -> *) where
+  SameTransformer t (t m) = True
+  SameTransformer t m     = False
 
-liftT :: (CanLiftTransformer t m) => TransformedMonad t m a -> m a
-liftT m = liftSat (Proxy :: Proxy (HasTransformer_ t)) (_liftT m)
+liftT :: (HasTransformer t m) => TransformedMonad t m a -> m a
+liftT m = liftSat (Proxy :: Proxy (IsTransformer t)) (_liftT m)
 
 -- -----------------------------------------------------------------------------
 -- ContT and ListT instances
@@ -62,8 +62,8 @@ liftT m = liftSat (Proxy :: Proxy (HasTransformer_ t)) (_liftT m)
 -- Note: RWS transformers aren't allowed for ContT and ListT as they
 -- don't allow passing through of Writer manipulations.
 
-instance (MonadLevel m) => ConstraintCanPassThrough (HasTransformer_ (LSt.StateT s)) (ContT r m)
-instance (MonadLevel m) => ConstraintCanPassThrough (HasTransformer_ (LSt.StateT s)) (ListT m)
+instance (MonadLevel m) => ConstraintCanPassThrough (IsTransformer (LSt.StateT s)) (ContT r m)
+instance (MonadLevel m) => ConstraintCanPassThrough (IsTransformer (LSt.StateT s)) (ListT m)
 
-instance (MonadLevel m) => ConstraintCanPassThrough (HasTransformer_ (SSt.StateT s)) (ContT r m)
-instance (MonadLevel m) => ConstraintCanPassThrough (HasTransformer_ (SSt.StateT s)) (ListT m)
+instance (MonadLevel m) => ConstraintCanPassThrough (IsTransformer (SSt.StateT s)) (ContT r m)
+instance (MonadLevel m) => ConstraintCanPassThrough (IsTransformer (SSt.StateT s)) (ListT m)
