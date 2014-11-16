@@ -12,7 +12,7 @@ maintainer:          Ivan.Miljenovic@gmail.com
 -- copyright:
 category:            Control
 build-type:          Simple
--- extra-source-files:
+extra-source-files:  README.md
 cabal-version:       >=1.10
 
 library
