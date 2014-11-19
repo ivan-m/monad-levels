@@ -1,5 +1,6 @@
 {-# LANGUAGE ConstraintKinds, DataKinds, FlexibleContexts, FlexibleInstances,
-             TupleSections, TypeFamilies, UndecidableInstances #-}
+             MultiParamTypeClasses, RankNTypes, TupleSections, TypeFamilies,
+             TypeOperators, UndecidableInstances #-}
 
 {- |
    Module      : Control.Monad.Levels.Definitions
@@ -14,6 +15,8 @@
 module Control.Monad.Levels.Definitions where
 
 import Control.Applicative
+import Data.Constraint
+import Data.Constraint.Forall
 
 import           Control.Monad.Trans.Cont          (ContT (..))
 import           Control.Monad.Trans.Except        (ExceptT (..), runExceptT)
@@ -93,94 +96,119 @@ instance (Monoid w, MonadTower m) => MonadTower_ (SW.WriterT w m) where
 
 class (MonadTower m, MonadTower (LowerMonad m)
       , BaseMonad m ~ BaseMonad (LowerMonad m), BaseMonad (LowerMonad m) ~ BaseMonad m)
-      => MonadLevel m where
+      => MonadLevel_ m where
 
   type LowerMonad m :: * -> *
 
   type InnerValue m a :: *
   type InnerValue m a = a
 
+  -- | Within the continuation for 'wrap' for @m a@, we can unwrap any
+  --   @m b@ where @UnwrappableValue m a b@ is satisfied.
+  type CanUnwrap_ m a b :: Constraint
+  type CanUnwrap_ m a b = ()
+
   type AllConstraintsThrough m :: Bool
   type AllConstraintsThrough m = True
 
-  wrap :: (Unwrapper m a (LowerMonadValue m a))
-           -> m a
+  wrap :: (Forall (CanUnwrapSelf m)) => (Unwrapper m a (LowerMonadValue m a))
+                                         -> m a
+
+class (MonadLevel_ m, CanUnwrap_ m a b) => CanUnwrap m a b
+instance (MonadLevel_ m, CanUnwrap_ m a b) => CanUnwrap m a b
+
+class (MonadLevel_ m, CanUnwrap m a a) => CanUnwrapSelf m a
+instance (MonadLevel_ m, CanUnwrap m a a) => CanUnwrapSelf m a
+
+instance (MonadLevel_ m) => Class (MonadLevel_ m, CanUnwrap m a a) (CanUnwrapSelf m a) where
+  cls = Sub Dict
+
+getUnwrapSelfProof :: (MonadLevel m) => MonadLevel m :- CanUnwrap m a a
+getUnwrapSelfProof = trans weaken2                -- CanUnwrap
+                           ( trans cls            -- Undo CanUnwrapSelf
+                                   (trans inst    -- Undo Forall
+                                          weaken2 -- Get Forall
+                                   )
+                           )
+
+type MonadLevel m = (MonadLevel_ m, Forall (CanUnwrapSelf m))
 
 type LowerMonadValue m a = LowerMonad m (InnerValue m a)
 
-type Unwrapper m a t =    (m a -> LowerMonadValue m a)
+type Unwrapper m a t =    (forall b. (CanUnwrap m a b) => m b -> LowerMonadValue m b)
                        -> (LowerMonad m a -> LowerMonadValue m a)
                        -> t
 
 -- -----------------------------------------------------------------------------
 
-instance (MonadTower m) => MonadLevel (ContT r m) where
+instance (MonadTower m) => MonadLevel_ (ContT r m) where
   type LowerMonad (ContT r m) = m
   type InnerValue (ContT r m) a = r
+  type CanUnwrap_ (ContT r m) a b = a ~ b
   type AllConstraintsThrough (ContT r m) = False
 
   wrap f = ContT $ \ cont -> f (`runContT` cont) (>>= cont)
 
-instance (MonadTower m) => MonadLevel (ExceptT e m) where
+instance (MonadTower m) => MonadLevel_ (ExceptT e m) where
   type LowerMonad (ExceptT e m) = m
   type InnerValue (ExceptT e m) a = Either e a
 
   wrap f = ExceptT $ f runExceptT (fmap Right)
 
-instance (MonadTower m) => MonadLevel (IdentityT m) where
+instance (MonadTower m) => MonadLevel_ (IdentityT m) where
   type LowerMonad (IdentityT m) = m
 
   wrap f = IdentityT $ f runIdentityT id
 
-instance (MonadTower m) => MonadLevel (ListT m) where
+instance (MonadTower m) => MonadLevel_ (ListT m) where
   type LowerMonad (ListT m) = m
   type InnerValue (ListT m) a = [a]
   type AllConstraintsThrough (ListT m) = False
 
   wrap f = ListT $ f runListT (fmap (:[]))
 
-instance (MonadTower m) => MonadLevel (MaybeT m) where
+instance (MonadTower m) => MonadLevel_ (MaybeT m) where
   type LowerMonad (MaybeT m) = m
   type InnerValue (MaybeT m) a = Maybe a
 
   wrap f = MaybeT $ f runMaybeT (fmap Just)
 
-instance (MonadTower m) => MonadLevel (ReaderT r m) where
+instance (MonadTower m) => MonadLevel_ (ReaderT r m) where
   type LowerMonad (ReaderT r m) = m
 
   wrap f = ReaderT $ \ r -> f (`runReaderT` r) id
 
-instance (Monoid w, MonadTower m) => MonadLevel (LRWS.RWST r w s m) where
+instance (Monoid w, MonadTower m) => MonadLevel_ (LRWS.RWST r w s m) where
   type LowerMonad (LRWS.RWST r w s m) = m
   type InnerValue (LRWS.RWST r w s m) a = (a,s,w)
 
   wrap f = LRWS.RWST $ \ r s -> f (\m -> LRWS.runRWST m r s) (fmap (,s,mempty))
 
-instance (Monoid w, MonadTower m) => MonadLevel (SRWS.RWST r w s m) where
+instance (Monoid w, MonadTower m) => MonadLevel_ (SRWS.RWST r w s m) where
   type LowerMonad (SRWS.RWST r w s m) = m
   type InnerValue (SRWS.RWST r w s m) a = (a,s,w)
 
   wrap f = SRWS.RWST $ \ r s -> f (\m -> SRWS.runRWST m r s) (fmap (,s,mempty))
 
-instance (MonadTower m) => MonadLevel (LSt.StateT s m) where
+instance (MonadTower m) => MonadLevel_ (LSt.StateT s m) where
   type LowerMonad (LSt.StateT s m) = m
   type InnerValue (LSt.StateT s m) a = (a,s)
 
   wrap f = LSt.StateT $ \ s -> f (`LSt.runStateT` s) (fmap (,s))
 
-instance (MonadTower m) => MonadLevel (SSt.StateT s m) where
+instance (MonadTower m) => MonadLevel_ (SSt.StateT s m) where
   type LowerMonad (SSt.StateT s m) = m
   type InnerValue (SSt.StateT s m) a = (a,s)
 
   wrap f = SSt.StateT $ \ s -> f (`SSt.runStateT` s) (fmap (,s))
 
-instance (Monoid w, MonadTower m) => MonadLevel (LW.WriterT w m) where
+instance (Monoid w, MonadTower m) => MonadLevel_ (LW.WriterT w m) where
   type LowerMonad (LW.WriterT w m) = m
   type InnerValue (LW.WriterT w m) a = (a,w)
 
   wrap f = LW.WriterT $ f LW.runWriterT (fmap (,mempty))
 
-instance (Monoid w, MonadTower m) => MonadLevel (SW.WriterT w m) where
+instance (Monoid w, MonadTower m) => MonadLevel_ (SW.WriterT w m) where
   type LowerMonad (SW.WriterT w m) = m
   type InnerValue (SW.WriterT w m) a = (a,w)
 

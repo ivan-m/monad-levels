@@ -1,5 +1,6 @@
-{-# LANGUAGE DataKinds, FlexibleInstances, KindSignatures,
-             MultiParamTypeClasses, OverlappingInstances, TypeFamilies #-}
+{-# LANGUAGE ConstraintKinds, DataKinds, FlexibleContexts, FlexibleInstances,
+             KindSignatures, MultiParamTypeClasses, OverlappingInstances,
+             TypeFamilies, UndecidableInstances #-}
 {- |
    Module      : Control.Monad.Levels.ConstraintPassing
    Description : Whether a transformer allows a constraint to pass through

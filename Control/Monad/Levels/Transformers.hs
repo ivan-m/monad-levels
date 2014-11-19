@@ -1,5 +1,6 @@
 {-# LANGUAGE ConstraintKinds, DataKinds, FlexibleContexts, FlexibleInstances,
-             MultiParamTypeClasses, ScopedTypeVariables, TypeFamilies #-}
+             MultiParamTypeClasses, ScopedTypeVariables, TypeFamilies,
+             UndecidableInstances #-}
 
 {- |
    Module      : Control.Monad.Levels.Transformers

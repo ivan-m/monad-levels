@@ -15,7 +15,8 @@
 module Control.Monad.Levels
        ( MonadTower_(..)
        , MonadTower
-       , MonadLevel (..)
+       , MonadLevel_(..)
+       , MonadLevel
          -- * Basic level manipulation
        , lift
          -- ** Lifting from the base

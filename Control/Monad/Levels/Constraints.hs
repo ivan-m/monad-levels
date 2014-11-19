@@ -39,6 +39,7 @@ import Control.Monad.Levels.Definitions
 
 import Data.Proxy (Proxy (..))
 import GHC.Exts   (Constraint)
+import Data.Constraint ((\\), (:-))
 
 -- -----------------------------------------------------------------------------
 
@@ -154,11 +155,11 @@ class VariadicArg v where
   --   monad @(m a)@.
   type VariadicType v (m :: * -> *) a
 
-  lowerVArg :: (MonadLevel m) => Proxy v
+  lowerVArg :: (MonadLevel m) => Proxy v -> Proxy m -> Proxy a
                               -> VariadicType v m a
                               -> Unwrapper m a (VariadicType v (LowerMonad m) (InnerValue m a))
 
-  liftVArg :: (MonadLevel m) => Proxy v
+  liftVArg :: (MonadLevel m) => Proxy v -> Proxy m -> Proxy a
                              -> VariadicType v (LowerMonad m) (InnerValue m a)
                              -> Unwrapper m a (VariadicType v m a)
 
@@ -169,9 +170,9 @@ data Const (b :: *)
 instance VariadicArg (Const b) where
   type VariadicType (Const b) m a = b
 
-  lowerVArg _ b _ _ = b
+  lowerVArg _ _ _ b _ _ = b
 
-  liftVArg  _ b _ _ = b
+  liftVArg  _ _ _ b _ _ = b
 
 -- | Corresponds to @m a@.
 data MonadicValue
@@ -179,9 +180,13 @@ data MonadicValue
 instance VariadicArg MonadicValue where
   type VariadicType MonadicValue m a = m a
 
-  lowerVArg _ m unwrap _ = unwrap m
+  lowerVArg _ pm pa m unwrap _ = unwrap m \\ (proofInst pm pa)
 
-  liftVArg  _ m _      _ = wrap (\ _ _ -> m)
+  liftVArg  _ _ _ m _      _ = wrap (\ _ _ -> m)
+
+proofInst :: (MonadLevel m) => Proxy m -> Proxy a -> (MonadLevel m :- CanUnwrap m a a)
+proofInst _ _ = getUnwrapSelfProof
+{-# INLINE proofInst #-}
 
 -- Can't have a LiftVA instance for MonadicValue as we can't lift it
 -- (as we don't know what the outer monad would be, if there even is
@@ -194,16 +199,16 @@ instance (VariadicArg va, VariadicArg vb) => VariadicArg (Func va vb) where
   type VariadicType (Func va vb) m a = VariadicType va m a -> VariadicType vb m a
 
   -- lower . f . lift
-  lowerVArg _ f unwrap addI
-    =   (\ v -> lowerVArg (Proxy :: Proxy vb) v unwrap addI)
+  lowerVArg _ m a f unwrap addI
+    =   (\ v -> lowerVArg (Proxy :: Proxy vb) m a v unwrap addI)
       . f
-      . (\ v -> liftVArg  (Proxy :: Proxy va) v unwrap addI)
+      . (\ v -> liftVArg  (Proxy :: Proxy va) m a v unwrap addI)
 
   -- lift . f . lower
-  liftVArg _ f unwrap addI
-    =   (\ v -> liftVArg  (Proxy :: Proxy vb) v unwrap addI)
+  liftVArg _ m a f unwrap addI
+    =   (\ v -> liftVArg  (Proxy :: Proxy vb) m a v unwrap addI)
       . f
-      . (\ v -> lowerVArg (Proxy :: Proxy va) v unwrap addI)
+      . (\ v -> lowerVArg (Proxy :: Proxy va) m a v unwrap addI)
 
 -- | A function composed of variadic arguments that produces a value
 --   of type @m a@.
@@ -224,12 +229,12 @@ data MkVarFn va
 instance (VariadicArg va) => VariadicFunction (MkVarFn va) where
   type VarFunction (MkVarFn va) m a = VariadicType va m a -> m a
 
-  applyVFn _ _ _ f va = wrap (\ unwrap addI ->
-                                f unwrap addI (lowerVArg (Proxy :: Proxy va) va unwrap addI))
+  applyVFn _ m a f va = wrap (\ unwrap addI ->
+                                f unwrap addI (lowerVArg (Proxy :: Proxy va) m a va unwrap addI))
 
 instance (VariadicArg va, VariadicFunction vf) => VariadicFunction (Func va vf) where
   type VarFunction  (Func va vf) m a = (VariadicType va m a) -> VarFunction vf m a
 
   applyVFn _ m a f va = applyVFn (Proxy :: Proxy vf) m a
                                  (\ unwrap addI ->
-                                    f unwrap addI (lowerVArg (Proxy :: Proxy va) va unwrap addI))
+                                    f unwrap addI (lowerVArg (Proxy :: Proxy va) m a va unwrap addI))
