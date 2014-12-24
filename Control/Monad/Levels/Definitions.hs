@@ -104,15 +104,21 @@ class (MonadTower m, MonadTower (LowerMonad m)
   type InnerValue m a = a
 
   -- | Within the continuation for 'wrap' for @m a@, we can unwrap any
-  --   @m b@ where @UnwrappableValue m a b@ is satisfied.
-  type CanUnwrap_ m a b :: Constraint
-  type CanUnwrap_ m a b = ()
+  --   @m b@ if @AllowOtherValues m ~ True@; otherwise, we can only
+  --   unwrap @m a@.
+  type AllowOtherValues m :: Bool
+  type AllowOtherValues m = True
 
   type AllConstraintsThrough m :: Bool
   type AllConstraintsThrough m = True
 
-  wrap :: (Forall (CanUnwrapSelf m)) => (Unwrapper m a (LowerMonadValue m a))
-                                         -> m a
+  wrap :: (Unwrapper m a (LowerMonadValue m a)) -> m a
+
+type CanUnwrap_ m a b = CheckOtherAllowed (AllowOtherValues m) a b
+
+type family CheckOtherAllowed (allowed::Bool) a b :: Constraint where
+  CheckOtherAllowed True  a b = ()
+  CheckOtherAllowed False a b = (a ~ b)
 
 class (MonadLevel_ m, CanUnwrap_ m a b) => CanUnwrap m a b
 instance (MonadLevel_ m, CanUnwrap_ m a b) => CanUnwrap m a b
@@ -144,7 +150,7 @@ type Unwrapper m a t =    (forall b. (CanUnwrap m a b) => m b -> LowerMonadValue
 instance (MonadTower m) => MonadLevel_ (ContT r m) where
   type LowerMonad (ContT r m) = m
   type InnerValue (ContT r m) a = r
-  type CanUnwrap_ (ContT r m) a b = a ~ b
+  type AllowOtherValues (ContT r m) = False
   type AllConstraintsThrough (ContT r m) = False
 
   wrap f = ContT $ \ cont -> f (`runContT` cont) (>>= cont)
