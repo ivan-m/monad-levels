@@ -287,6 +287,28 @@ proofInst _ _ = getUnwrapSelfProof
 -- Can't have a LiftVA instance for MonadicValue as we can't lift it
 -- (as we don't know what the outer monad would be, if there even is
 -- one).
+-- | Corresponds to @m b@, where the final result is @m a@.
+data MonadicOther b
+
+instance VariadicLower (MonadicOther b) where
+  type LowerV (MonadicOther b) m = MonadicOther (InnerValue m b)
+
+  type SatV (MonadicOther b) n c m = MonadicOther (SatValue_ n c m b)
+
+  type CanLower (MonadicOther b) m = AllowOtherValues m
+
+instance VariadicArg (MonadicOther b) where
+  type VariadicType (MonadicOther b) m a = m b
+
+  validLowerArg _ _ = Sub Dict
+
+  validSatArg0 _ _ _ = Sub Dict
+
+  validSatArg _ _ _ _ = Sub Dict
+
+  lowerVArg _ _ _ m unwrap _ = unwrap m
+
+  liftVArg _ _ _ m _ _ = wrap (\ _ _ -> m)
 
 -- | Represents the function @a -> b@.
 data Func (a :: *) (b :: *)
