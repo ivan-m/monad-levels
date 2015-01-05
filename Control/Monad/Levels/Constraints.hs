@@ -3,10 +3,8 @@
              RankNTypes, ScopedTypeVariables, TypeFamilies, TypeOperators,
              UndecidableInstances #-}
 
--- unsafeCoerceConstraint is used in three places: two are to state
--- that (And p q ~ True => (p ~ True, q ~ True)) and the third is for
--- when by construction we know that CanLowerFunc ~ True, but it's
--- difficult to actually prove.
+-- unsafeCoerceConstraint is used to prevent the need for a complex
+-- induction proof (which I'm not sure can actually be achieved).
 {-# LANGUAGE Trustworthy #-}
 {- |
    Module      : Control.Monad.Levels.Constraints
@@ -44,7 +42,7 @@ import Control.Monad.Levels.Definitions
 
 import Data.Constraint
 import Data.Constraint.Unsafe (unsafeCoerceConstraint)
-import Data.Proxy      (Proxy (..))
+import Data.Proxy             (Proxy (..))
 
 -- -----------------------------------------------------------------------------
 
@@ -59,11 +57,11 @@ class (MonadTower m) => SatisfyConstraint_ (n :: Nat) (c :: (* -> *) -> Constrai
 
   type SatValue_ n c m a
 
-  type CanLowerFunc f n c m :: Bool
+  type CanLowerFunc f n c m a :: Constraint
 
   _liftSat :: Proxy n -> Proxy c -> SatMonad_ n c m a -> m a
 
-  _lower :: (VariadicFunction f, CanLowerFunc f n c m ~ True)
+  _lower :: (VariadicFunction f, CanLowerFunc f n c m a)
             => Proxy n -> Proxy c -> Proxy f -> Proxy m -> Proxy a
             -> VarFunctionSat f n c m a
             -> VarFunction f m a
@@ -74,7 +72,7 @@ instance (MonadTower m, c m) => SatisfyConstraint_ Zero c m where
 
   type SatValue_ Zero c m a = a
 
-  type CanLowerFunc f Zero c m = True
+  type CanLowerFunc f Zero c m a = ()
 
   _liftSat _ _ m = m
 
@@ -87,8 +85,8 @@ instance (ConstraintCanPassThrough c m, SatisfyConstraint_ n c (LowerMonad m))
 
   type SatValue_ (Suc n) c m a = SatValue_ n c (LowerMonad m) (InnerValue m a)
 
-  type CanLowerFunc f (Suc n) c m = And (CanLower f m)
-                                         (CanLowerFunc (LowerV f m) n c (LowerMonad m))
+  type CanLowerFunc f (Suc n) c m a = ( (CanLower f m a)
+                                      , (CanLowerFunc (LowerV f m) n c (LowerMonad m) (InnerValue m a)))
 
   _liftSat n c m = wrap (\ _unwrap addI -> addI (_liftSat (predP n) c m))
 
@@ -100,16 +98,6 @@ instance (ConstraintCanPassThrough c m, SatisfyConstraint_ n c (LowerMonad m))
                                                                    f
                                                                    \\ validLowerFunc m vf
                                                                    \\ validSatFunc n c m vf)
-                        \\ trans weaken2 (unwrapFunc n c m vf)
-                        \\ trans weaken1 (unwrapFunc n c m vf)
-
-unwrapFunc :: (SatisfyConstraint_ (Suc n) c m, VariadicFunction f, CanLowerFunc f (Suc n) c m ~ True)
-              => Proxy (Suc n) -> Proxy c -> Proxy m -> Proxy f
-              -> (CanLowerFunc f (Suc n) c m ~ True) :- ( CanLower f m ~ True
-                                                         , CanLowerFunc (LowerV f m) n c (LowerMonad m) ~ True)
-unwrapFunc _ _ _ _ = unsafeCoerceConstraint
-{-# INLINE unwrapFunc #-}
-
 lowerP :: (MonadLevel m) => Proxy m -> Proxy (LowerMonad m)
 lowerP _ = Proxy
 {-# INLINE lowerP #-}
@@ -127,7 +115,7 @@ type SatisfyConstraint c m = ( SatisfyConstraint_ (SatDepth c m) c m
 
 type SatisfyConstraintF c m a f = ( SatisfyConstraint c m
                                   , VariadicFunction f
-                                  , CanLowerFunc f (SatDepth c m) c m ~ True)
+                                  , CanLowerFunc f (SatDepth c m) c m a)
 
 liftSat :: forall c m a. (SatisfyConstraint c m) =>
            Proxy c -> SatMonad c m a -> m a
@@ -150,7 +138,7 @@ type MFunc = MkVarFn MonadicValue
 lowerFunction :: forall c m a. (SatisfyConstraint c m) => Proxy c
                  -> (SatMonadValue c m a -> SatMonadValue c m a)
                  -> m a -> m a
-lowerFunction c f = lowerSat c vf m a f \\ funcProof n c m
+lowerFunction c f = lowerSat c vf m a f \\ funcProof n c m a
   where
     vf :: Proxy MFunc
     vf = Proxy
@@ -165,12 +153,12 @@ lowerFunction c f = lowerSat c vf m a f \\ funcProof n c m
     a = Proxy
 
 funcProof :: (SatisfyConstraint_ n c m)
-             => Proxy n -> Proxy c -> Proxy m
-             -> SatisfyConstraint c m :- (CanLowerFunc MFunc n c m ~ True)
-funcProof _ _ _ = unsafeCoerceConstraint
+             => Proxy n -> Proxy c -> Proxy m -> Proxy a
+             -> SatisfyConstraint c m :- (CanLowerFunc MFunc n c m a)
+funcProof _ _ _ _ = unsafeCoerceConstraint
 {-# INLINE funcProof #-}
--- Will always be True by construction, but an actual proof would need
--- to be by induction.
+-- Will always be @~ ()@ by construction, but an actual proof would
+-- need to be by induction.
 
 -- -----------------------------------------------------------------------------
 
@@ -201,8 +189,8 @@ class VariadicLower v where
   type SatV v (n :: Nat) (c :: (* -> *) -> Constraint) (m :: * -> *) :: *
   type SatV v n c m = v
 
-  type CanLower v (m :: * -> *) :: Bool
-  type CanLower v m             = True
+  type CanLower v (m :: * -> *) a :: Constraint
+  type CanLower v m             a = ()
 
 -- | Class representing arguments/parameters for lower-able variadic
 --   functions.
@@ -243,12 +231,12 @@ class (VariadicLower v) => VariadicArg v where
                             :- v ~ v
   validSatArg _ _ _ _ = Sub Dict
 
-  lowerVArg :: (MonadLevel m, CanLower v m ~ True)
+  lowerVArg :: (MonadLevel m, CanLower v m a)
                => Proxy v -> Proxy m -> Proxy a
                -> VariadicType v m a
                -> Unwrapper m a (LowerVArg v m a)
 
-  liftVArg :: (MonadLevel m, CanLower v m ~ True)
+  liftVArg :: (MonadLevel m, CanLower v m a)
               => Proxy v -> Proxy m -> Proxy a
               -> LowerVArg v m a
               -> Unwrapper m a (VariadicType v m a)
@@ -256,7 +244,8 @@ class (VariadicLower v) => VariadicArg v where
 type LowerVArg v m a = VariadicType (LowerV v m) (LowerMonad m) (InnerValue m a)
 
 -- | A constant type that does not depend upon the current monadic
---   context.  That is, @Const b@ corresponds to just @b@.
+--   context.  That is, @Const b@ corresponds to just @b@.  It is kept
+--   as-is when lowering through the different levels.
 data Const (b :: *)
 
 instance VariadicLower (Const b)
@@ -284,9 +273,6 @@ proofInst :: (MonadLevel m) => Proxy m -> Proxy a -> (MonadLevel m :- CanUnwrap 
 proofInst _ _ = getUnwrapSelfProof
 {-# INLINE proofInst #-}
 
--- Can't have a LiftVA instance for MonadicValue as we can't lift it
--- (as we don't know what the outer monad would be, if there even is
--- one).
 -- | Corresponds to @m b@, where the final result is @m a@.
 data MonadicOther b
 
@@ -295,7 +281,7 @@ instance VariadicLower (MonadicOther b) where
 
   type SatV (MonadicOther b) n c m = MonadicOther (SatValue_ n c m b)
 
-  type CanLower (MonadicOther b) m = AllowOtherValues m
+  type CanLower (MonadicOther b) m a = CanUnwrap m a b
 
 instance VariadicArg (MonadicOther b) where
   type VariadicType (MonadicOther b) m a = m b
@@ -309,6 +295,18 @@ instance VariadicArg (MonadicOther b) where
   lowerVArg _ _ _ m unwrap _ = unwrap m
 
   liftVArg _ _ _ m _ _ = wrap (\ _ _ -> m)
+
+-- -- | This corresponds to @a@ when the final result is @m a@.
+-- data ValueOnly
+
+-- instance VariadicLower ValueOnly
+
+-- instance VariadicArg ValueOnly where
+--   type VariadicType ValueOnly m a = a
+
+--   lowerVArg _ _ _ a _ _ = a
+
+--   liftVArg  _ _ _ a _ _ = a
 
 -- | Represents the function @a -> b@.
 data Func (a :: *) (b :: *)
@@ -324,7 +322,7 @@ instance (VariadicLower a, VariadicLower b) => VariadicLower (Func a b) where
 
   type SatV (Func va vb) n c m = Func (SatV va n c m) (SatV vb n c m)
 
-  type CanLower (Func va vb) m = And (CanLower va m) (CanLower vb m)
+  type CanLower (Func va vb) m a = ((CanLower va m a), (CanLower vb m a))
 
 instance (VariadicArg va, VariadicArg vb) => VariadicArg (Func va vb) where
   type VariadicType (Func va vb) m a = VariadicType va m a -> VariadicType vb m a
@@ -340,20 +338,15 @@ instance (VariadicArg va, VariadicArg vb) => VariadicArg (Func va vb) where
 
   -- lower . f . lift
   lowerVArg pf m a f unwrap addI
-    =   (\ v -> lowerVArg (pfb pf) m a v unwrap addI \\ trans weaken2 (pfUnwrap pf m))
+    =   (\ v -> lowerVArg (pfb pf) m a v unwrap addI)
       . f
-      . (\ v -> liftVArg  (pfa pf) m a v unwrap addI \\ trans weaken1 (pfUnwrap pf m))
+      . (\ v -> liftVArg  (pfa pf) m a v unwrap addI)
 
   -- lift . f . lower
   liftVArg pf m a f unwrap addI
-    =   (\ v -> liftVArg  (pfb pf) m a v unwrap addI \\ trans weaken2 (pfUnwrap pf m))
+    =   (\ v -> liftVArg  (pfb pf) m a v unwrap addI)
       . f
-      . (\ v -> lowerVArg (pfa pf) m a v unwrap addI \\ trans weaken1 (pfUnwrap pf m))
-
-pfUnwrap :: (MonadLevel m, VariadicLower (Func va vb), CanLower (Func va vb) m ~ True)
-            => Proxy (Func va vb) -> Proxy m
-            -> (CanLower (Func va vb) m ~ True) :- (CanLower va m ~ True, CanLower vb m ~ True)
-pfUnwrap _ _ = unsafeCoerceConstraint
+      . (\ v -> lowerVArg (pfa pf) m a v unwrap addI)
 
 -- | A function composed of variadic arguments that produces a value
 --   of type @m a@.
@@ -374,7 +367,7 @@ class (VariadicLower f) => VariadicFunction f where
                   -> SatisfyConstraint_ (Suc n) c m
                      :- SatV f (Suc n) c m ~ SatV (LowerV f m) n c (LowerMonad m)
 
-  applyVFn :: (MonadLevel m, CanLower f m ~ True)
+  applyVFn :: (MonadLevel m, CanLower f m a)
               => Proxy f -> Proxy m -> Proxy a
               -> Unwrapper m a (VarFunctionLower f m a)
               -> VarFunction f m a
@@ -396,7 +389,7 @@ instance (VariadicLower va) => VariadicLower (MkVarFn va) where
 
   type SatV (MkVarFn va) n c m = MkVarFn (SatV va n c m)
 
-  type CanLower (MkVarFn va) m = CanLower va m
+  type CanLower (MkVarFn va) m a = CanLower va m a
 
 instance (VariadicArg va) => VariadicFunction (MkVarFn va) where
 
@@ -425,12 +418,6 @@ instance (VariadicArg va, VariadicFunction vf) => VariadicFunction (Func va vf) 
 
   applyVFn pf m a f va = applyVFn (pfb pf) m a
                                   (\ unwrap addI ->
-                                     f unwrap addI (lowerVArg (pfa pf) m a va unwrap addI
-                                                    \\ trans weaken1 (pfUnwrap pf m)))
-                         \\ trans weaken2 (pfUnwrap pf m)
+                                     f unwrap addI (lowerVArg (pfa pf) m a va unwrap addI))
 
 -- -----------------------------------------------------------------------------
-
-type family And (p :: Bool) (q :: Bool) :: Bool where
-  And False q = False
-  And True  q = q
