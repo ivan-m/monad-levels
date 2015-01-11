@@ -95,13 +95,17 @@ instance (Monoid w, MonadTower m) => MonadTower_ (SW.WriterT w m) where
 -- -----------------------------------------------------------------------------
 
 class (MonadTower m, MonadTower (LowerMonad m)
-      , BaseMonad m ~ BaseMonad (LowerMonad m), BaseMonad (LowerMonad m) ~ BaseMonad m)
+      , BaseMonad m ~ BaseMonad (LowerMonad m), BaseMonad (LowerMonad m) ~ BaseMonad m
+      , CanAddInternalM m)
       => MonadLevel_ m where
 
   type LowerMonad m :: * -> *
 
   type InnerValue m a :: *
   type InnerValue m a = a
+
+  type WithLower_ m :: (* -> *) -> * -> *
+  type WithLower_ m = AddIdent
 
   -- | Within the continuation for 'wrap' for @m a@, we can unwrap any
   --   @m b@ if @AllowOtherValues m ~ True@; otherwise, we can only
@@ -130,95 +134,155 @@ instance (MonadLevel_ m) => Class (MonadLevel_ m, CanUnwrap m a a) (CanUnwrapSel
   cls = Sub Dict
 
 getUnwrapSelfProof :: (MonadLevel m) => MonadLevel m :- CanUnwrap m a a
-getUnwrapSelfProof = trans weaken2                -- CanUnwrap
-                           ( trans cls            -- Undo CanUnwrapSelf
-                                   (trans inst    -- Undo Forall
-                                          weaken2 -- Get Forall
+getUnwrapSelfProof = trans weaken2                       -- CanUnwrap
+                           ( trans cls                   -- Undo CanUnwrapSelf
+                                   (trans inst           -- Undo Forall
+                                          (trans weaken1 -- Get Forall
+                                                 weaken2 -- Remove MonadLevel_
+                                          )
                                    )
                            )
 
-type MonadLevel m = (MonadLevel_ m, Forall (CanUnwrapSelf m))
+type MonadLevel m = (MonadLevel_ m, (Forall (CanUnwrapSelf m), WithLowerC m))
 
 type LowerMonadValue m a = LowerMonad m (InnerValue m a)
 
 type Unwrapper m a t =    (forall b. (CanUnwrap m a b) => m b -> LowerMonadValue m b)
-                       -> (LowerMonad m a -> LowerMonadValue m a)
+                       -> (WithLower m a)
                        -> t
+
+type WithLower m = WithLower_ m m
+type WithLowerC m = AddConstraint (WithLower_ m) m
+
+type CanAddInternalM m = AddInternalM (WithLower_ m)
+type CanAddInternal  m = AddInternal  (WithLower_ m)
+
+class AddInternalM (ai :: (* -> *) -> * -> *) where
+
+  type AddConstraint ai (m :: * -> *) :: Constraint
+  type AddConstraint ai m             = ()
+
+  addInternalM :: (MonadLevel m, AddConstraint ai m)
+                  => ai m a -> LowerMonad m a
+                  -> LowerMonadValue m a
+
+class (AddInternalM ai) => AddInternal ai where
+  addInternal :: (MonadLevel m, AddConstraint ai m)
+                 => ai m a -> a -> InnerValue m a
+
+newtype AddIM m a = AddIM { addIMFunc :: LowerMonad m a -> LowerMonadValue m a }
+
+instance AddInternalM AddIM where
+  addInternalM = addIMFunc
+
+newtype AddI m a = AddI { addIFunc :: a -> InnerValue m a }
+
+instance AddInternalM AddI where
+  addInternalM = fmap . addIFunc
+
+instance AddInternal AddI where
+  addInternal = addIFunc
+
+data AddIdent (m :: * -> *) a = AddIdent
+
+instance AddInternalM AddIdent where
+  type AddConstraint AddIdent m = Forall (InnerSame m)
+
+  addInternalM ai = id \\ addIdentProof ai
+
+class (MonadLevel_ m, InnerValue m a ~ a) => InnerSame m a
+instance (MonadLevel_ m, InnerValue m a ~ a) => InnerSame m a
+
+addIdentProof :: AddIdent m a -> Forall (InnerSame m) :- InnerSame m a
+addIdentProof _ = inst
+
+instance AddInternal AddIdent where
+  addInternal ai = id \\ addIdentProof ai
 
 -- -----------------------------------------------------------------------------
 
 instance (MonadTower m) => MonadLevel_ (ContT r m) where
   type LowerMonad (ContT r m) = m
   type InnerValue (ContT r m) a = r
+  type WithLower_ (ContT r m) = AddIM
   type AllowOtherValues (ContT r m) = False
   type AllConstraintsThrough (ContT r m) = False
 
-  wrap f = ContT $ \ cont -> f (`runContT` cont) (>>= cont)
+  wrap f = ContT $ \ cont -> f (`runContT` cont) (AddIM (>>= cont))
 
 instance (MonadTower m) => MonadLevel_ (ExceptT e m) where
   type LowerMonad (ExceptT e m) = m
   type InnerValue (ExceptT e m) a = Either e a
+  type WithLower_ (ExceptT e m) = AddI
 
-  wrap f = ExceptT $ f runExceptT (fmap Right)
+  wrap f = ExceptT $ f runExceptT (AddI Right)
 
 instance (MonadTower m) => MonadLevel_ (IdentityT m) where
   type LowerMonad (IdentityT m) = m
 
-  wrap f = IdentityT $ f runIdentityT id
+  wrap f = IdentityT $ f runIdentityT AddIdent
 
 instance (MonadTower m) => MonadLevel_ (ListT m) where
   type LowerMonad (ListT m) = m
   type InnerValue (ListT m) a = [a]
+  type WithLower_ (ListT m) = AddI
   type AllConstraintsThrough (ListT m) = False
 
-  wrap f = ListT $ f runListT (fmap (:[]))
+  wrap f = ListT $ f runListT (AddI (:[]))
 
 instance (MonadTower m) => MonadLevel_ (MaybeT m) where
   type LowerMonad (MaybeT m) = m
   type InnerValue (MaybeT m) a = Maybe a
+  type WithLower_ (MaybeT m) = AddI
 
-  wrap f = MaybeT $ f runMaybeT (fmap Just)
+  wrap f = MaybeT $ f runMaybeT (AddI Just)
 
 instance (MonadTower m) => MonadLevel_ (ReaderT r m) where
   type LowerMonad (ReaderT r m) = m
 
-  wrap f = ReaderT $ \ r -> f (`runReaderT` r) id
+  wrap f = ReaderT $ \ r -> f (`runReaderT` r) AddIdent
 
 instance (Monoid w, MonadTower m) => MonadLevel_ (LRWS.RWST r w s m) where
   type LowerMonad (LRWS.RWST r w s m) = m
   type InnerValue (LRWS.RWST r w s m) a = (a,s,w)
+  type WithLower_ (LRWS.RWST r w s m) = AddI
 
-  wrap f = LRWS.RWST $ \ r s -> f (\m -> LRWS.runRWST m r s) (fmap (,s,mempty))
+  wrap f = LRWS.RWST $ \ r s -> f (\m -> LRWS.runRWST m r s) (AddI (,s,mempty))
 
 instance (Monoid w, MonadTower m) => MonadLevel_ (SRWS.RWST r w s m) where
   type LowerMonad (SRWS.RWST r w s m) = m
   type InnerValue (SRWS.RWST r w s m) a = (a,s,w)
+  type WithLower_ (SRWS.RWST r w s m) = AddI
 
-  wrap f = SRWS.RWST $ \ r s -> f (\m -> SRWS.runRWST m r s) (fmap (,s,mempty))
+  wrap f = SRWS.RWST $ \ r s -> f (\m -> SRWS.runRWST m r s) (AddI (,s,mempty))
 
 instance (MonadTower m) => MonadLevel_ (LSt.StateT s m) where
   type LowerMonad (LSt.StateT s m) = m
   type InnerValue (LSt.StateT s m) a = (a,s)
+  type WithLower_ (LSt.StateT s m) = AddI
 
-  wrap f = LSt.StateT $ \ s -> f (`LSt.runStateT` s) (fmap (,s))
+  wrap f = LSt.StateT $ \ s -> f (`LSt.runStateT` s) (AddI (,s))
 
 instance (MonadTower m) => MonadLevel_ (SSt.StateT s m) where
   type LowerMonad (SSt.StateT s m) = m
   type InnerValue (SSt.StateT s m) a = (a,s)
+  type WithLower_ (SSt.StateT s m) = AddI
 
-  wrap f = SSt.StateT $ \ s -> f (`SSt.runStateT` s) (fmap (,s))
+  wrap f = SSt.StateT $ \ s -> f (`SSt.runStateT` s) (AddI (,s))
 
 instance (Monoid w, MonadTower m) => MonadLevel_ (LW.WriterT w m) where
   type LowerMonad (LW.WriterT w m) = m
   type InnerValue (LW.WriterT w m) a = (a,w)
+  type WithLower_ (LW.WriterT w m) = AddI
 
-  wrap f = LW.WriterT $ f LW.runWriterT (fmap (,mempty))
+  wrap f = LW.WriterT $ f LW.runWriterT (AddI (,mempty))
 
 instance (Monoid w, MonadTower m) => MonadLevel_ (SW.WriterT w m) where
   type LowerMonad (SW.WriterT w m) = m
   type InnerValue (SW.WriterT w m) a = (a,w)
+  type WithLower_ (SW.WriterT w m) = AddI
 
-  wrap f = SW.WriterT $ f SW.runWriterT (fmap (,mempty))
+  wrap f = SW.WriterT $ f SW.runWriterT (AddI (,mempty))
 
 -- -----------------------------------------------------------------------------
 

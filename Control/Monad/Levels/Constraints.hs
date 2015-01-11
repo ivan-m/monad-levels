@@ -88,7 +88,7 @@ instance (ConstraintCanPassThrough c m, SatisfyConstraint_ n c (LowerMonad m))
   type CanLowerFunc f (Suc n) c m a = ( (CanLower f m a)
                                       , (CanLowerFunc (LowerV f m) n c (LowerMonad m) (InnerValue m a)))
 
-  _liftSat n c m = wrap (\ _unwrap addI -> addI (_liftSat (predP n) c m))
+  _liftSat n c m = wrap (\ _unwrap addI -> addInternalM addI (_liftSat (predP n) c m))
 
   _lower n c vf m a f = applyVFn vf m a (\ _unwrap _addI -> _lower (predP n)
                                                                    c

@@ -37,7 +37,7 @@ import Control.Monad.Levels.Transformers
 -- -----------------------------------------------------------------------------
 
 lift :: (MonadLevel m) => LowerMonad m a -> m a
-lift m = wrap $ \ _unwrap addI -> addI m
+lift m = wrap $ \ _unwrap addI -> addInternalM addI m
 
 -- | Ideally, this alias would not be needed as every instance of
 --   'MonadTower' should satisfy the required constraint.  However,
