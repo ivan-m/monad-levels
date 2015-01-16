@@ -18,6 +18,7 @@
  -}
 module Control.Monad.Levels.Constraints
        ( SatisfyConstraint
+       , SatisfyConstraintF
        , ConstraintSatisfied
        , SatMonad
        , SatMonadValue
@@ -30,6 +31,8 @@ module Control.Monad.Levels.Constraints
        , MkVarFn
        , Func
        , MonadicValue
+       , MonadicOther
+       , ValueOnly
        , Const
        , VariadicArg
        , VariadicType
