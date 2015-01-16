@@ -208,11 +208,6 @@ class (VariadicLower v) => VariadicArg v where
   --   monad @(m a)@.
   type VariadicType v (m :: * -> *) a
 
-  validLowerArg :: (MonadLevel m) => Proxy m -> Proxy v -> MonadLevel m :- VariadicArg (LowerV v m)
-  default validLowerArg :: (MonadLevel m, LowerV v m ~ v)
-                           => Proxy m -> Proxy v -> MonadLevel m :- VariadicArg v
-  validLowerArg _ _ = Sub Dict
-
   validSatArg0 :: (SatisfyConstraint_ Zero c m)
                   => Proxy c -> Proxy m -> Proxy v
                   -> SatisfyConstraint_ Zero c m :- SatV v Zero c m ~ v
@@ -231,10 +226,24 @@ class (VariadicLower v) => VariadicArg v where
                             :- v ~ v
   validSatArg _ _ _ _ = Sub Dict
 
+class (VariadicArg v) => LowerableVArg v where
+
+  validLowerArg :: (MonadLevel m) => Proxy m -> Proxy v -> MonadLevel m :- LowerableVArg (LowerV v m)
+  default validLowerArg :: (MonadLevel m, LowerV v m ~ v)
+                           => Proxy m -> Proxy v -> MonadLevel m :- LowerableVArg v
+  validLowerArg _ _ = Sub Dict
+
   lowerVArg :: (MonadLevel m, CanLower v m a)
                => Proxy v -> Proxy m -> Proxy a
                -> VariadicType v m a
                -> Unwrapper m a (LowerVArg v m a)
+
+class (VariadicArg v) => LiftableVArg v where
+
+  validLiftArg :: (MonadLevel m) => Proxy m -> Proxy v -> MonadLevel m :- LiftableVArg (LowerV v m)
+  default validLiftArg :: (MonadLevel m, LowerV v m ~ v)
+                          => Proxy m -> Proxy v -> MonadLevel m :- LiftableVArg v
+  validLiftArg _ _ = Sub Dict
 
   liftVArg :: (MonadLevel m, CanLower v m a)
               => Proxy v -> Proxy m -> Proxy a
@@ -253,7 +262,11 @@ instance VariadicLower (Const b)
 instance VariadicArg (Const b) where
   type VariadicType (Const b) m a = b
 
+instance LowerableVArg (Const b) where
+
   lowerVArg _ _ _ b _ _ = b
+
+instance LiftableVArg (Const b) where
 
   liftVArg  _ _ _ b _ _ = b
 
@@ -265,7 +278,11 @@ instance VariadicLower MonadicValue
 instance VariadicArg MonadicValue where
   type VariadicType MonadicValue m a = m a
 
+instance LowerableVArg MonadicValue where
+
   lowerVArg _ pm pa m unwrap _ = unwrap m \\ (proofInst pm pa)
+
+instance LiftableVArg MonadicValue where
 
   liftVArg  _ _ _ m _      _ = wrap (\ _ _ -> m)
 
@@ -286,27 +303,34 @@ instance VariadicLower (MonadicOther b) where
 instance VariadicArg (MonadicOther b) where
   type VariadicType (MonadicOther b) m a = m b
 
-  validLowerArg _ _ = Sub Dict
-
   validSatArg0 _ _ _ = Sub Dict
 
   validSatArg _ _ _ _ = Sub Dict
 
+instance LowerableVArg (MonadicOther b) where
+
+  validLowerArg _ _ = Sub Dict
+
   lowerVArg _ _ _ m unwrap _ = unwrap m
+
+instance LiftableVArg (MonadicOther b) where
+
+  validLiftArg _ _ = Sub Dict
 
   liftVArg _ _ _ m _ _ = wrap (\ _ _ -> m)
 
--- -- | This corresponds to @a@ when the final result is @m a@.
--- data ValueOnly
+-- | This corresponds to @a@ when the final result is @m a@.
+data ValueOnly
 
--- instance VariadicLower ValueOnly
+instance VariadicLower ValueOnly where
+  type CanLower ValueOnly m a = CanAddInternal m
 
--- instance VariadicArg ValueOnly where
---   type VariadicType ValueOnly m a = a
+instance VariadicArg ValueOnly where
+  type VariadicType ValueOnly m a = a
 
---   lowerVArg _ _ _ a _ _ = a
+instance LowerableVArg ValueOnly where
 
---   liftVArg  _ _ _ a _ _ = a
+  lowerVArg _ _ _ a _ addI = addInternal addI a
 
 -- | Represents the function @a -> b@.
 data Func (a :: *) (b :: *)
@@ -327,20 +351,27 @@ instance (VariadicLower a, VariadicLower b) => VariadicLower (Func a b) where
 instance (VariadicArg va, VariadicArg vb) => VariadicArg (Func va vb) where
   type VariadicType (Func va vb) m a = VariadicType va m a -> VariadicType vb m a
 
-  validLowerArg m f = Sub Dict \\ validLowerArg m (pfa f)
-                               \\ validLowerArg m (pfb f)
-
   validSatArg0 c m f = Sub Dict \\ validSatArg0 c m (pfa f)
                                 \\ validSatArg0 c m (pfb f)
 
   validSatArg n c m f = Sub Dict \\ validSatArg n c m (pfa f)
                                  \\ validSatArg n c m (pfb f)
 
+instance (LiftableVArg va, LowerableVArg vb) => LowerableVArg (Func va vb) where
+
+  validLowerArg m f = Sub Dict \\ validLiftArg m  (pfa f)
+                               \\ validLowerArg m (pfb f)
+
   -- lower . f . lift
   lowerVArg pf m a f unwrap addI
     =   (\ v -> lowerVArg (pfb pf) m a v unwrap addI)
       . f
       . (\ v -> liftVArg  (pfa pf) m a v unwrap addI)
+
+instance (LowerableVArg va, LiftableVArg vb) => LiftableVArg (Func va vb) where
+
+  validLiftArg m f = Sub Dict \\ validLowerArg m (pfa f)
+                              \\ validLiftArg m  (pfb f)
 
   -- lift . f . lower
   liftVArg pf m a f unwrap addI
@@ -391,7 +422,7 @@ instance (VariadicLower va) => VariadicLower (MkVarFn va) where
 
   type CanLower (MkVarFn va) m a = CanLower va m a
 
-instance (VariadicArg va) => VariadicFunction (MkVarFn va) where
+instance (LowerableVArg va) => VariadicFunction (MkVarFn va) where
 
   type VarFunction (MkVarFn va) m a = VariadicType va m a -> m a
 
@@ -404,7 +435,7 @@ instance (VariadicArg va) => VariadicFunction (MkVarFn va) where
   applyVFn pmf m a f va = wrap (\ unwrap addI ->
                                 f unwrap addI (lowerVArg (pmvf pmf) m a va unwrap addI))
 
-instance (VariadicArg va, VariadicFunction vf) => VariadicFunction (Func va vf) where
+instance (LowerableVArg va, VariadicFunction vf) => VariadicFunction (Func va vf) where
   type VarFunction (Func va vf) m a = (VariadicType va m a) -> VarFunction vf m a
 
   validLowerFunc m f = Sub Dict \\ validLowerArg  m (pfa f)
