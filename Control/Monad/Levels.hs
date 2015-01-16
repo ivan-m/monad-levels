@@ -20,6 +20,7 @@ module Control.Monad.Levels
          -- * Basic level manipulation
        , lift
          -- ** Lifting from the base
+       , IsBaseMonad
        , HasBaseMonad
        , liftBase
        , BaseMonadOf
