@@ -113,8 +113,8 @@ class (MonadTower m, MonadTower (LowerMonad m)
   type AllowOtherValues m :: Bool
   type AllowOtherValues m = True
 
-  type AllConstraintsThrough m :: Bool
-  type AllConstraintsThrough m = True
+  type DefaultAllowConstraints m :: Bool
+  type DefaultAllowConstraints m = True
 
   wrap :: (Unwrapper m a (LowerMonadValue m a)) -> m a
 
@@ -206,7 +206,7 @@ instance (MonadTower m) => MonadLevel_ (ContT r m) where
   type InnerValue (ContT r m) a = r
   type WithLower_ (ContT r m) = AddIM
   type AllowOtherValues (ContT r m) = False
-  type AllConstraintsThrough (ContT r m) = False
+  type DefaultAllowConstraints (ContT r m) = False
 
   wrap f = ContT $ \ cont -> f (`runContT` cont) (AddIM (>>= cont))
 
@@ -226,7 +226,7 @@ instance (MonadTower m) => MonadLevel_ (ListT m) where
   type LowerMonad (ListT m) = m
   type InnerValue (ListT m) a = [a]
   type WithLower_ (ListT m) = AddI
-  type AllConstraintsThrough (ListT m) = False
+  type DefaultAllowConstraints (ListT m) = False
 
   wrap f = ListT $ f runListT (AddI (:[]))
 

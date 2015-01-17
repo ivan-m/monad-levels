@@ -22,6 +22,6 @@ import GHC.Exts (Constraint)
 
 class (MonadLevel m) => ConstraintCanPassThrough (c :: (* -> *) -> Constraint) m
 
-instance (MonadLevel m, AllConstraintsThrough m ~ True) => ConstraintCanPassThrough c m
+instance (MonadLevel m, DefaultAllowConstraints m ~ True) => ConstraintCanPassThrough c m
 
 instance (MonadLevel m) => ConstraintCanPassThrough IsBaseMonad m
