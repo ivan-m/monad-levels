@@ -45,12 +45,6 @@ lift m = wrap $ \ _unwrap addI -> addInternalM addI m
 --   this is needed for technical reasons.
 type HasBaseMonad m = SatisfyConstraint IsBaseMonad m
 
-type instance ConstraintSatisfied IsBaseMonad m = SameMonad (BaseMonad m) m
-
-type family SameMonad (m :: * -> *) (n :: * -> *) where
-  SameMonad m m = True
-  SameMonad m n = False
-
 liftBase :: (HasBaseMonad m) => BaseMonad m a -> m a
 liftBase m = liftSat (Proxy :: Proxy IsBaseMonad) m
 {-# INLINE liftBase #-}

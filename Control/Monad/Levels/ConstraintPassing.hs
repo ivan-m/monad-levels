@@ -16,12 +16,10 @@ module Control.Monad.Levels.ConstraintPassing where
 
 import Control.Monad.Levels.Definitions
 
-import GHC.Exts (Constraint)
-
 -- -----------------------------------------------------------------------------
 
-class (MonadLevel m) => ConstraintCanPassThrough (c :: (* -> *) -> Constraint) m
+class (ValidConstraint c, MonadLevel m) => ConstraintCanPassThrough c m
 
-instance (MonadLevel m, DefaultAllowConstraints m ~ True) => ConstraintCanPassThrough c m
+instance (ValidConstraint c, MonadLevel m, DefaultAllowConstraints m ~ True) => ConstraintCanPassThrough c m
 
 instance (MonadLevel m) => ConstraintCanPassThrough IsBaseMonad m

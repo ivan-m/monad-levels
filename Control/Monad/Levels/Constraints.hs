@@ -54,7 +54,7 @@ data Nat = Zero | Suc Nat
 predP :: Proxy (Suc n) -> Proxy n
 predP _ = Proxy
 
-class (MonadTower m) => SatisfyConstraint_ (n :: Nat) (c :: (* -> *) -> Constraint) m where
+class (ValidConstraint c, MonadTower m) => SatisfyConstraint_ (n :: Nat) c m where
 
   type SatMonad_ n c m :: * -> *
 
@@ -69,7 +69,7 @@ class (MonadTower m) => SatisfyConstraint_ (n :: Nat) (c :: (* -> *) -> Constrai
             -> VarFunctionSat f n c m a
             -> VarFunction f m a
 
-instance (MonadTower m, c m) => SatisfyConstraint_ Zero c m where
+instance (ValidConstraint c, MonadTower m, c m) => SatisfyConstraint_ Zero c m where
 
   type SatMonad_ Zero c m   = m
 
@@ -164,8 +164,6 @@ funcProof _ _ _ _ = unsafeCoerceConstraint
 -- need to be by induction.
 
 -- -----------------------------------------------------------------------------
-
-type family ConstraintSatisfied (c :: (* -> *) -> Constraint) (m :: * -> *) :: Bool
 
 type TrySatisfy (c :: (* -> *) -> Constraint) (m :: (* -> *)) = TrySatisfy' c (BaseMonad m) m
 

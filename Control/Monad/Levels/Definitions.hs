@@ -286,8 +286,18 @@ instance (Monoid w, MonadTower m) => MonadLevel_ (SW.WriterT w m) where
 
 -- -----------------------------------------------------------------------------
 
-class (MonadTower m, m ~ BaseMonad m, BaseMonad m ~ m) => IsBaseMonad m where
-  idBase :: m a -> m a
-  idBase = id
+class (MonadTower m, m ~ BaseMonad m, BaseMonad m ~ m) => IsBaseMonad m
 
 instance (MonadTower m, m ~ BaseMonad m, BaseMonad m ~ m) => IsBaseMonad m
+
+type family SameMonad (m :: * -> *) (n :: * -> *) where
+  SameMonad m m = True
+  SameMonad m n = False
+
+-- -----------------------------------------------------------------------------
+
+class ValidConstraint (c :: (* -> *) -> Constraint) where
+  type ConstraintSatisfied c (m :: * -> *) :: Bool
+
+instance ValidConstraint IsBaseMonad where
+  type ConstraintSatisfied IsBaseMonad m = SameMonad (BaseMonad m) m

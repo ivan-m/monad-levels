@@ -47,7 +47,8 @@ class (MonadLevel m, m ~ t (LowerMonad m), t (LowerMonad m) ~ m) => IsTransforme
 
 instance (MonadLevel m, m ~ t (LowerMonad m), t (LowerMonad m) ~ m) => IsTransformer t m
 
-type instance ConstraintSatisfied (IsTransformer (t :: (* -> *) -> * -> *)) (m :: * -> *) = SameTransformer t m
+instance ValidConstraint (IsTransformer t) where
+  type ConstraintSatisfied (IsTransformer t) m = SameTransformer t m
 
 type family SameTransformer (t :: (* -> *) -> * -> *) (m :: * -> *) where
   SameTransformer t (t m) = True

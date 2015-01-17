@@ -17,6 +17,7 @@ module Control.Monad.Levels.State where
 import Control.Monad.Levels
 import Control.Monad.Levels.ConstraintPassing
 import Control.Monad.Levels.Constraints
+import Control.Monad.Levels.Definitions       (ValidConstraint (..))
 
 import           Control.Monad.Trans.Cont         (ContT)
 import           Control.Monad.Trans.List         (ListT)
@@ -32,7 +33,8 @@ class (MonadTower m) => IsState s m where
 
   _state :: (s -> (a,s)) -> m a
 
-type instance ConstraintSatisfied (IsState s) m = SameState s m
+instance ValidConstraint (IsState s) where
+  type ConstraintSatisfied (IsState s) m = SameState s m
 
 type family SameState s m where
   SameState s (LSt.StateT s m)    = True

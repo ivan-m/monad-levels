@@ -19,6 +19,7 @@ module Control.Monad.Levels.Cont
 
 import Control.Monad.Levels
 import Control.Monad.Levels.Constraints
+import Control.Monad.Levels.Definitions (ValidConstraint (..))
 
 import           Control.Monad.Trans.Cont (ContT)
 import qualified Control.Monad.Trans.Cont as C
@@ -35,7 +36,8 @@ class (MonadLevel m) => IsCont m where
 instance (MonadTower m) => IsCont (ContT r m) where
   _callCC = C.callCC
 
-type instance ConstraintSatisfied IsCont m = IsContT m
+instance ValidConstraint IsCont where
+  type ConstraintSatisfied IsCont m = IsContT m
 
 type family IsContT m where
   IsContT (ContT r m) = True
