@@ -63,11 +63,11 @@ liftT m = liftSat (Proxy :: Proxy (IsTransformer t)) m
 -- Note: RWS transformers aren't allowed for ContT and ListT as they
 -- don't allow passing through of Writer manipulations.
 
-instance (MonadLevel m) => ConstraintCanPassThrough (IsTransformer (LSt.StateT s)) (ContT r m)
-instance (MonadLevel m) => ConstraintCanPassThrough (IsTransformer (LSt.StateT s)) (ListT m)
+instance (MonadLevel m) => ConstraintPassThrough (IsTransformer (LSt.StateT s)) (ContT r m)
+instance (MonadLevel m) => ConstraintPassThrough (IsTransformer (LSt.StateT s)) (ListT m)
 
-instance (MonadLevel m) => ConstraintCanPassThrough (IsTransformer (SSt.StateT s)) (ContT r m)
-instance (MonadLevel m) => ConstraintCanPassThrough (IsTransformer (SSt.StateT s)) (ListT m)
+instance (MonadLevel m) => ConstraintPassThrough (IsTransformer (SSt.StateT s)) (ContT r m)
+instance (MonadLevel m) => ConstraintPassThrough (IsTransformer (SSt.StateT s)) (ListT m)
 
-instance (MonadLevel m) => ConstraintCanPassThrough (IsTransformer (ReaderT r)) (ContT c m)
-instance (MonadLevel m) => ConstraintCanPassThrough (IsTransformer (ReaderT r)) (ListT m)
+instance (MonadLevel m) => ConstraintPassThrough (IsTransformer (ReaderT r)) (ContT c m)
+instance (MonadLevel m) => ConstraintPassThrough (IsTransformer (ReaderT r)) (ListT m)

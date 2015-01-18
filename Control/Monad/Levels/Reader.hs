@@ -95,5 +95,5 @@ instance (MonadTower m, Monoid w) => IsReader r (SRWS.RWST r w s m) where
 -- -----------------------------------------------------------------------------
 -- Dealing with ContT and ListT
 
-instance (MonadTower m) => ConstraintCanPassThrough (IsReader r) (ContT c m)
-instance (MonadTower m) => ConstraintCanPassThrough (IsReader r) (ListT m)
+instance (MonadTower m) => ConstraintPassThrough (IsReader r) (ContT c m)
+instance (MonadTower m) => ConstraintPassThrough (IsReader r) (ListT m)
