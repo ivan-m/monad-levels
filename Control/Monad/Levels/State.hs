@@ -81,5 +81,5 @@ instance (MonadTower m, Monoid w) => IsState s (SRWS.RWST r w s m) where
 -- -----------------------------------------------------------------------------
 -- Dealing with ContT and ListT
 
-instance (MonadTower m) => ConstraintPassThrough (IsState s) (ContT r m)
-instance (MonadTower m) => ConstraintPassThrough (IsState s) (ListT m)
+instance (MonadTower m) => ConstraintPassThrough (IsState s) (ContT r m) True
+instance (MonadTower m) => ConstraintPassThrough (IsState s) (ListT m) True

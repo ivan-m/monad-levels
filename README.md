@@ -93,9 +93,6 @@ Disadvantages
 * Large usage of associated types means type errors can be difficult
   to decipher.
 
-* Assumes that monad transformers like `StateT` can allow any
-  constraint through.
-
 * Due to usage of closed type-families, it is not possible to add
   extra instances to typeclasses (i.e. it is not possible to use a
   custom `State` monad/monad-transformer with

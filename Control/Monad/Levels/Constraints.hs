@@ -81,7 +81,7 @@ instance (ValidConstraint c, MonadTower m, c m) => SatisfyConstraint_ Zero c m w
 
   _lower _n c vf m _a f = f \\ validSatFunc0 c m vf
 
-instance (ConstraintPassThrough c m, SatisfyConstraint_ n c (LowerMonad m))
+instance (ConstraintPassThrough c m True, SatisfyConstraint_ n c (LowerMonad m))
          => SatisfyConstraint_ (Suc n) c m where
 
   type SatMonad_ (Suc n) c m   = SatMonad_ n c (LowerMonad m)

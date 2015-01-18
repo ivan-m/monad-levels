@@ -18,8 +18,9 @@ import Control.Monad.Levels.Definitions
 
 -- -----------------------------------------------------------------------------
 
-class (ValidConstraint c, MonadLevel m) => ConstraintPassThrough c m
+class (ValidConstraint c, MonadLevel m) => ConstraintPassThrough c m (b :: Bool)
 
-instance (ValidConstraint c, MonadLevel m, DefaultAllowConstraints m ~ True) => ConstraintPassThrough c m
+instance (ValidConstraint c, MonadLevel m, DefaultAllowConstraints m ~ b)
+          => ConstraintPassThrough c m b
 
-instance (MonadLevel m) => ConstraintPassThrough IsBaseMonad m
+instance (MonadLevel m) => ConstraintPassThrough IsBaseMonad m True
