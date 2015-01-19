@@ -6,6 +6,7 @@
 -- unsafeCoerceConstraint is used to prevent the need for a complex
 -- induction proof (which I'm not sure can actually be achieved).
 {-# LANGUAGE Trustworthy #-}
+
 {- |
    Module      : Control.Monad.Levels.Constraints
    Description : A Level-based approach to constraints
@@ -25,8 +26,6 @@ module Control.Monad.Levels.Constraints
        , liftSat
        , lowerSat
        , lowerFunction
-         -- * Re-exported for convenience
-       , Proxy(..)
          -- * Variadic functions
        , MkVarFn
        , Func
@@ -38,6 +37,8 @@ module Control.Monad.Levels.Constraints
        , VariadicType
        , VariadicFunction
        , VarFunction
+         -- * Re-exported for convenience
+       , Proxy(..)
        ) where
 
 import Control.Monad.Levels.ConstraintPassing
