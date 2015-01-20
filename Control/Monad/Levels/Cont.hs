@@ -19,7 +19,6 @@ module Control.Monad.Levels.Cont
 
 import Control.Monad.Levels
 import Control.Monad.Levels.Constraints
-import Control.Monad.Levels.Definitions (ValidConstraint (..))
 
 import           Control.Monad.Trans.Cont (ContT)
 import qualified Control.Monad.Trans.Cont as C

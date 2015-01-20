@@ -18,6 +18,18 @@ import Control.Monad.Levels.Definitions
 
 -- -----------------------------------------------------------------------------
 
+-- | Indicates whether a specified constraint is allowed to pass
+--   through a particular level.
+--
+--   (It may not be recognisable in Haddock documentation, but the @b@
+--   parameter is of kind @'Bool'@ using the @DataKinds@ extension).
+--
+--   By default, for all monad levels this is set to the value of
+--   'DefaultAllowConstraints' for all constraints, with the exception
+--   of 'IsBaseMonad' for which it is set to 'True'.
+--
+--   Instances of this class can - and should when appropriate - be
+--   overlapped\/overriden.
 class (ValidConstraint c, MonadLevel m) => ConstraintPassThrough c m (b :: Bool)
 
 instance (ValidConstraint c, MonadLevel m, DefaultAllowConstraints m ~ b)

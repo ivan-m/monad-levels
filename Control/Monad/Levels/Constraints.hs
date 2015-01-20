@@ -18,25 +18,38 @@
 
  -}
 module Control.Monad.Levels.Constraints
-       ( SatisfyConstraint
-       , SatisfyConstraintF
-       , ConstraintSatisfied
-       , SatMonad
-       , SatMonadValue
-       , liftSat
+       ( -- * Constraints in the monad stack
+         liftSat
        , lowerSat
        , lowerFunction
+       , SatisfyConstraint
+       , SatisfyConstraintF
+       , SatMonad
+       , SatMonadValue
+       , SatFunction
+       , ValidConstraint(..)
+       , ConstraintPassThrough
+         -- ** Internal types and classes
+       , SatisfyConstraint_(SatMonad_, SatValue_, CanLowerFunc)
+       , SatDepth
          -- * Variadic functions
-       , MkVarFn
-       , Func
-       , MonadicValue
-       , MonadicOther
-       , ValueOnly
-       , Const
-       , VariadicArg
-       , VariadicType
        , VariadicFunction
        , VarFunction
+       , VariadicLower
+       , LowerV
+       , SatV
+       , CanLower
+       , VarFunctionSat
+       , MkVarFn
+       , Func
+         -- ** Variadic arguments
+       , VariadicArg(VariadicType)
+       , LowerableVArg
+       , LiftableVArg
+       , ValueOnly
+       , Const
+       , MonadicValue
+       , MonadicOther
          -- * Re-exported for convenience
        , Proxy(..)
        ) where
@@ -55,12 +68,30 @@ data Nat = Zero | Suc Nat
 predP :: Proxy (Suc n) -> Proxy n
 predP _ = Proxy
 
+-- | Inductively find the \"floor\" in the 'MonadTower' where the
+--   specified constraint is satisfied.
+--
+--   This class is only exported for documentation purposes: no other
+--   instances are possible, and most of the internals are not safe to
+--   use outside of this module.
+--
+--   You should use 'SatisfyConstraint' instead of this in your
+--   constraints.
 class (ValidConstraint c, MonadTower m) => SatisfyConstraint_ (n :: Nat) c m where
 
+  -- | The monad in the stack that satisfies the constraint.
   type SatMonad_ n c m :: * -> *
 
+  -- | The value in the stack within the monad that satisfies the
+  --   constraint.
   type SatValue_ n c m a
 
+  -- | Any additional constraints that may be needed for a specified
+  --   'VariadicFunction' to be valid as it is lowered to the
+  --   satisfying monad.
+  --
+  --   This typically matters only if 'ValueOnly' or 'MonadicOther'
+  --   are used.
   type CanLowerFunc f n c m a :: Constraint
 
   _liftSat :: Proxy n -> Proxy c -> SatMonad_ n c m a -> m a
@@ -70,6 +101,7 @@ class (ValidConstraint c, MonadTower m) => SatisfyConstraint_ (n :: Nat) c m whe
             -> VarFunctionSat f n c m a
             -> VarFunction f m a
 
+-- | The satisfying monad for the specified constraint.
 instance (ValidConstraint c, MonadTower m, c m) => SatisfyConstraint_ Zero c m where
 
   type SatMonad_ Zero c m   = m
@@ -82,6 +114,9 @@ instance (ValidConstraint c, MonadTower m, c m) => SatisfyConstraint_ Zero c m w
 
   _lower _n c vf m _a f = f \\ validSatFunc0 c m vf
 
+-- | Inductive step for finding the satisfying monad.  Note the usage
+--   of 'ConstraintPassThrough' to ensure that only (constraint,monad
+--   level) pairings that are valid are considered.
 instance (ConstraintPassThrough c m True, SatisfyConstraint_ n c (LowerMonad m))
          => SatisfyConstraint_ (Suc n) c m where
 
@@ -110,6 +145,9 @@ innerP :: (MonadLevel m) => Proxy m -> Proxy a -> Proxy (InnerValue m a)
 innerP _ _ = Proxy
 {-# INLINE innerP #-}
 
+-- | For a specified constraint @c@ and 'MonadTower' @m@,
+--   @SatisfyConstraint c m@ specifies that it is possible to reach a
+--   monad in the tower that specifies the constraint.
 type SatisfyConstraint c m = ( SatisfyConstraint_ (SatDepth c m) c m
                              , c (SatMonad c m)
                              -- Best current way of stating that the
@@ -117,18 +155,28 @@ type SatisfyConstraint c m = ( SatisfyConstraint_ (SatDepth c m) c m
                              -- the specified one.
                              , BaseMonad (SatMonad c m) ~ BaseMonad m)
 
+-- | An extension of 'SatisfyConstraint' that also ensures that any
+--   additional constraints needed to satisfy a 'VariadicFunction' @f@
+--   to achieve an end result of type @m a@ are met.
 type SatisfyConstraintF c m a f = ( SatisfyConstraint c m
                                   , VariadicFunction f
                                   , CanLowerFunc f (SatDepth c m) c m a)
 
+-- | Lift a value of the satisfying monad to the top of the tower.
 liftSat :: forall c m a. (SatisfyConstraint c m) =>
            Proxy c -> SatMonad c m a -> m a
 liftSat p m = _liftSat (Proxy :: Proxy (SatDepth c m)) p m
 
+-- | The type of the 'VariadicFunction' @f@ when the provided
+--   constraint is satisfied.
 type SatFunction c f m a = VarFunctionSat f (SatDepth c m) c m a
 
+-- | Converts @m a@ into what the value in the monadic stack is where
+--   the monad satisfies the provided constraint.
 type SatMonadValue c m a = SatMonad_ (SatDepth c m) c m (SatValue_ (SatDepth c m) c m a)
 
+-- | Lower a function from the top of the monad tower down to the
+--   satisfying monad in which it can be applied.
 lowerSat :: forall c m a f. (SatisfyConstraintF c m a f) =>
             Proxy c -> Proxy f -> Proxy m -> Proxy a
             -> SatFunction c f m a -> VarFunction f m a
@@ -139,6 +187,8 @@ lowerSat c vf m a f = _lower n c vf m a f
 
 type MFunc = MkVarFn MonadicValue
 
+-- | A specialised instance of 'lowerSat' where a simple function of
+--   type @m a -> m a@ is lowered to the satisfying monad.
 lowerFunction :: forall c m a. (SatisfyConstraint c m) => Proxy c
                  -> (SatMonadValue c m a -> SatMonadValue c m a)
                  -> m a -> m a
@@ -166,6 +216,8 @@ funcProof _ _ _ _ = unsafeCoerceConstraint
 
 -- -----------------------------------------------------------------------------
 
+-- Converts the monadic stack into a list of sub-stacks, and tests if
+-- each sub-stack satisfies the constraint.
 type TrySatisfy (c :: (* -> *) -> Constraint) (m :: (* -> *)) = TrySatisfy' c (BaseMonad m) m
 
 type family TrySatisfy' (c :: (* -> *) -> Constraint) (b :: (* -> *)) (m :: (* -> *)) :: [Bool] where
@@ -176,6 +228,7 @@ type family FindTrue (bms :: [Bool]) :: Nat where
   FindTrue (True  ': t) = Zero
   FindTrue (False ': t) = Suc (FindTrue t)
 
+-- | Calculate how many levels down is the satisfying monad.
 type SatDepth (c :: (* -> *) -> Constraint) (m :: * -> *) = FindTrue (TrySatisfy c m)
 
 -- | The Monad in the tower that satisfies the provided constraint.
@@ -183,27 +236,37 @@ type SatMonad (c :: (* -> *) -> Constraint) (m :: * -> *) = SatMonad_ (SatDepth 
 
 -- -----------------------------------------------------------------------------
 
+-- | Base class for dealing with variadic functions\/arguments.
 class VariadicLower v where
 
+  -- | The type when lowered to the 'LowerMonad'.  In most cases this
+  --   will be the same value.
   type LowerV v (m :: * -> *) :: *
   type LowerV v m = v
 
+  -- | The type when applied to the satisfying monad.
   type SatV v (n :: Nat) (c :: (* -> *) -> Constraint) (m :: * -> *) :: *
   type SatV v n c m = v
 
+  -- | Any additional constraints needed when lowering @v@.
   type CanLower v (m :: * -> *) a :: Constraint
   type CanLower v m             a = ()
 
--- | Class representing arguments/parameters for lower-able variadic
+-- | Class representing arguments\/parameters for lower-able variadic
 --   functions.
 --
---   An argument is either:
+--   When considering a function with an end result of @m a@, the
+--   following argument types are available:
 --
---       * A constant value 'Const'
+--   [@'ValueOnly'@] corresponds to @a@.
 --
---       * A value in the specified monad 'MonadicValue'
+--   [@'Const' b@] corresponds to some other type @b@.
 --
---       * A function from a constant to an existing 'VariadicArg' instance 'Func'.
+--   [@'MonadicValue'@] corresponds to @m a@.
+--
+--   [@'MonadicOther' b@] corresponds to @m b@.
+--
+--   [@'Func' v1 v2@] corresponds to @v1 -> v2@.
 class (VariadicLower v) => VariadicArg v where
 
   -- | The type that the variadic guard corresponds to within the
@@ -228,6 +291,11 @@ class (VariadicLower v) => VariadicArg v where
                             :- v ~ v
   validSatArg _ _ _ _ = Sub Dict
 
+-- | Variadic arguments that can be lowered.  All 'VariadicArg' values
+--   are instances of this class.
+--
+--   This actually defines how a variadic argument is lowered down to
+--   the 'LowerMonad'.
 class (VariadicArg v) => LowerableVArg v where
 
   validLowerArg :: (MonadLevel m) => Proxy m -> Proxy v -> MonadLevel m :- LowerableVArg (LowerV v m)
@@ -240,6 +308,16 @@ class (VariadicArg v) => LowerableVArg v where
                -> VariadicType v m a
                -> Unwrapper m a (LowerVArg v m a)
 
+-- | In contrast to 'LowerableVArg', this class is for 'VariadicArg'
+--   values that can be /lifted/ from the 'LowerMonad'.
+--
+--   This is important for @'Func' v1 v2@ arguments, as to lower a
+--   function we need to /lift/ @v1@ before applying the function, and
+--   then subsequently lower the result.
+--
+--   All instances of 'VariadicArg' are instances of this with the
+--   exception of 'ValueOnly' (as it's not always possible to convert
+--   an arbitrary @'InnerValue' m a@ back into an @a@).
 class (VariadicArg v) => LiftableVArg v where
 
   validLiftArg :: (MonadLevel m) => Proxy m -> Proxy v -> MonadLevel m :- LiftableVArg (LowerV v m)
@@ -292,7 +370,8 @@ proofInst :: (MonadLevel m) => Proxy m -> Proxy a -> (MonadLevel m :- CanUnwrap 
 proofInst _ _ = getUnwrapSelfProof
 {-# INLINE proofInst #-}
 
--- | Corresponds to @m b@, where the final result is @m a@.
+-- | Corresponds to @m b@, where the final result is @m a@.  This
+--   requires the extra constraint of @'CanUnwrap' m a b@.
 data MonadicOther b
 
 instance VariadicLower (MonadicOther b) where
@@ -321,7 +400,8 @@ instance LiftableVArg (MonadicOther b) where
 
   liftVArg _ _ _ m _ _ = wrap (\ _ _ -> m)
 
--- | This corresponds to @a@ when the final result is @m a@.
+-- | This corresponds to @a@ when the final result is @m a@.  This
+--   requires the extra constraint of @'CanAddInternal' m@.
 data ValueOnly
 
 instance VariadicLower ValueOnly where
@@ -334,8 +414,8 @@ instance LowerableVArg ValueOnly where
 
   lowerVArg _ _ _ a _ addI = addInternal addI a
 
--- | Represents the function @a -> b@.
-data Func (a :: *) (b :: *)
+-- | Represents the function @v1 -> v2@.
+data Func (v1 :: *) (v2 :: *)
 
 pfa :: Proxy (Func a b) -> Proxy a
 pfa _ = Proxy
@@ -385,7 +465,7 @@ instance (LowerableVArg va, LiftableVArg vb) => LiftableVArg (Func va vb) where
 --   of type @m a@.
 class (VariadicLower f) => VariadicFunction f where
 
-  -- | The function (that produces a value of type @t@) that this
+  -- | The function (that produces a value of type @m a@) that this
   --   instance corresponds to.
   type VarFunction f (m :: * -> *) a
 
@@ -407,12 +487,20 @@ class (VariadicLower f) => VariadicFunction f where
 
 type VarFunctionLower f (m :: * -> *) a = VarFunction (LowerV f m) (LowerMonad m) (InnerValue m a)
 
+-- | The function represented by the 'VariadicFunction' when lowered
+--   to the satisfying monad.
 type VarFunctionSat f n c m a = VarFunction (SatV f n c m) (SatMonad_ n c m) (SatValue_ n c m a)
 
 plowerF :: (MonadLevel m, VariadicFunction f) => Proxy m -> Proxy f -> Proxy (LowerV f m)
 plowerF _ _ = Proxy
 
-data MkVarFn va
+-- | The fundamental way of creating a 'VariadicFunction'.  @MkVarFn
+--   v@ corresponds to a function of type @'VariadicType' v m a -> m
+--   a@ for some specified @m a@.
+--
+--   If more than one argument is needed for a function, they can be
+--   prepended on using 'Func'.
+data MkVarFn v
 
 pmvf :: Proxy (MkVarFn va) -> Proxy va
 pmvf _ = Proxy

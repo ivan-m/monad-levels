@@ -20,7 +20,6 @@ module Control.Monad.Levels.Transformers
        , IsTransformer
        ) where
 
-import Control.Monad.Levels.ConstraintPassing
 import Control.Monad.Levels.Constraints
 import Control.Monad.Levels.Definitions
 

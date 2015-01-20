@@ -296,6 +296,17 @@ type family SameMonad (m :: * -> *) (n :: * -> *) where
 
 -- -----------------------------------------------------------------------------
 
+-- | When considering whether a particular monad within a 'MonadTower'
+--   stack satisfies a constraint, we need to be able to determine
+--   this at the type level.
+--
+--   This is achieved with the 'ConstraintSatisfied' associated type:
+--   it should be equated to a closed type family with the result
+--   being 'True' for all monads for which the constraint is satisfied
+--   and 'False' for all others.
+--
+--   (This is defined as a type class rather than just a type family
+--   so that we can explicitly state that this needs to be defined.)
 class ValidConstraint (c :: (* -> *) -> Constraint) where
   type ConstraintSatisfied c (m :: * -> *) :: Bool
 

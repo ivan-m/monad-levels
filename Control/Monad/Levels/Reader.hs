@@ -22,9 +22,7 @@ module Control.Monad.Levels.Reader
   ) where
 
 import Control.Monad.Levels
-import Control.Monad.Levels.ConstraintPassing
 import Control.Monad.Levels.Constraints
-import Control.Monad.Levels.Definitions       (ValidConstraint (..))
 
 import           Control.Monad.Trans.Cont       (ContT)
 import           Control.Monad.Trans.List       (ListT)
