@@ -21,16 +21,18 @@ module Control.Monad.Levels.Constraints
        ( -- * Constraints in the monad stack
          liftSat
        , lowerSat
+       , lowerSat'
        , lowerFunction
        , SatisfyConstraint
        , SatisfyConstraintF
        , SatMonad
        , SatMonadValue
+       , CanLowerFunc
        , SatFunction
        , ValidConstraint(..)
        , ConstraintPassThrough
          -- ** Internal types and classes
-       , SatisfyConstraint_(SatMonad_, SatValue_, CanLowerFunc)
+       , SatisfyConstraint_(SatMonad_, SatValue_, CanLowerFunc_)
        , SatDepth
          -- * Variadic functions
        , VariadicFunction
@@ -86,17 +88,13 @@ class (ValidConstraint c, MonadTower m) => SatisfyConstraint_ (n :: Nat) c m whe
   --   constraint.
   type SatValue_ n c m a
 
-  -- | Any additional constraints that may be needed for a specified
-  --   'VariadicFunction' to be valid as it is lowered to the
-  --   satisfying monad.
-  --
-  --   This typically matters only if 'ValueOnly' or 'MonadicOther'
-  --   are used.
-  type CanLowerFunc f n c m a :: Constraint
+  -- | The extra constraints needed to be able to lower the provided
+  --   'VariadicFunction' @f@ to the satisfying monad.
+  type CanLowerFunc_ f n c m a :: Constraint
 
   _liftSat :: Proxy n -> Proxy c -> SatMonad_ n c m a -> m a
 
-  _lower :: (VariadicFunction f, CanLowerFunc f n c m a)
+  _lower :: (VariadicFunction f, CanLowerFunc_ f n c m a)
             => Proxy n -> Proxy c -> Proxy f -> Proxy m -> Proxy a
             -> VarFunctionSat f n c m a
             -> VarFunction f m a
@@ -108,7 +106,7 @@ instance (ValidConstraint c, MonadTower m, c m) => SatisfyConstraint_ Zero c m w
 
   type SatValue_ Zero c m a = a
 
-  type CanLowerFunc f Zero c m a = ()
+  type CanLowerFunc_ f Zero c m a = ()
 
   _liftSat _ _ m = m
 
@@ -124,8 +122,8 @@ instance (ConstraintPassThrough c m True, SatisfyConstraint_ n c (LowerMonad m))
 
   type SatValue_ (Suc n) c m a = SatValue_ n c (LowerMonad m) (InnerValue m a)
 
-  type CanLowerFunc f (Suc n) c m a = ( (CanLower f m a)
-                                      , (CanLowerFunc (LowerV f m) n c (LowerMonad m) (InnerValue m a)))
+  type CanLowerFunc_ f (Suc n) c m a = ( (CanLower f m a)
+                                       , (CanLowerFunc_ (LowerV f m) n c (LowerMonad m) (InnerValue m a)))
 
   _liftSat n c m = wrap (\ _unwrap addI -> addInternalM addI (_liftSat (predP n) c m))
 
@@ -160,7 +158,15 @@ type SatisfyConstraint c m = ( SatisfyConstraint_ (SatDepth c m) c m
 --   to achieve an end result of type @m a@ are met.
 type SatisfyConstraintF c m a f = ( SatisfyConstraint c m
                                   , VariadicFunction f
-                                  , CanLowerFunc f (SatDepth c m) c m a)
+                                  , CanLowerFunc f c m a)
+
+-- | Any additional constraints that may be needed for a specified
+--   'VariadicFunction' to be valid as it is lowered to the satisfying
+--   monad.
+--
+--   This typically matters only if 'ValueOnly' or 'MonadicOther' are
+--   used.
+type CanLowerFunc f c m a = CanLowerFunc_ f (SatDepth c m) c m a
 
 -- | Lift a value of the satisfying monad to the top of the tower.
 liftSat :: forall c m a. (SatisfyConstraint c m) =>
@@ -187,18 +193,25 @@ lowerSat c vf m a f = _lower n c vf m a f
 
 type MFunc = MkVarFn MonadicValue
 
+-- | A variant of 'lowerSat' for when @CanLower f m a ~ ()@.
+lowerSat' :: forall c m a f. (SatisfyConstraint c m, VariadicFunction f)
+             => Proxy c -> Proxy f -> Proxy m -> Proxy a
+             -> (() :- CanLower f m a)
+             -> SatFunction c f m a -> VarFunction f m a
+lowerSat' c vf m a prf f = _lower n c vf m a f \\ simpleFuncProof vf c m a prf
+  where
+    n :: Proxy (SatDepth c m)
+    n = Proxy
+
 -- | A specialised instance of 'lowerSat' where a simple function of
 --   type @m a -> m a@ is lowered to the satisfying monad.
 lowerFunction :: forall c m a. (SatisfyConstraint c m) => Proxy c
                  -> (SatMonadValue c m a -> SatMonadValue c m a)
                  -> m a -> m a
-lowerFunction c f = lowerSat c vf m a f \\ funcProof n c m a
+lowerFunction c f = lowerSat' c vf m a (Sub Dict) f
   where
     vf :: Proxy MFunc
     vf = Proxy
-
-    n :: Proxy (SatDepth c m)
-    n = Proxy
 
     m :: Proxy m
     m = Proxy
@@ -206,11 +219,11 @@ lowerFunction c f = lowerSat c vf m a f \\ funcProof n c m a
     a :: Proxy a
     a = Proxy
 
-funcProof :: (SatisfyConstraint_ n c m)
-             => Proxy n -> Proxy c -> Proxy m -> Proxy a
-             -> SatisfyConstraint c m :- (CanLowerFunc MFunc n c m a)
-funcProof _ _ _ _ = unsafeCoerceConstraint
-{-# INLINE funcProof #-}
+simpleFuncProof :: (SatisfyConstraint c m, VariadicFunction f)
+                   => Proxy f -> Proxy c -> Proxy m -> Proxy a
+                   -> (() :- CanLower f m a) -> (() :- CanLowerFunc f c m a)
+simpleFuncProof _ _ _ _ (Sub Dict) = unsafeCoerceConstraint
+{-# INLINE simpleFuncProof #-}
 -- Will always be @~ ()@ by construction, but an actual proof would
 -- need to be by induction.
 
