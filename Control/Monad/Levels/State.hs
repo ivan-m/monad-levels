@@ -9,10 +9,19 @@
    License     : 3-Clause BSD-style
    Maintainer  : Ivan.Miljenovic@gmail.com
 
-
+Monad environments for stateful computations.
 
  -}
-module Control.Monad.Levels.State where
+module Control.Monad.Levels.State
+  ( state
+  , get
+  , gets
+  , put
+  , modify
+  , modify'
+  , HasState
+  , IsState
+  ) where
 
 import Control.Monad.Levels
 import Control.Monad.Levels.Constraints
@@ -27,6 +36,8 @@ import           Data.Monoid                      (Monoid)
 
 -- -----------------------------------------------------------------------------
 
+-- | The minimal definition needed for a monad providing a stateful
+--   environment.
 class (MonadTower m) => IsState s m where
 
   _state :: (s -> (a,s)) -> m a
@@ -41,22 +52,35 @@ type family SameState s m where
   SameState s (SRWS.RWST r w s m) = True
   SameState s m                   = False
 
+-- | A monad stack containing a stateful environment of type @s@.
 type HasState s m = SatisfyConstraint (IsState s) m
 
+-- | Embed a simple state action into the monad stack.
 state :: forall m s a. (HasState s m) => (s -> (a,s)) -> m a
 state = liftSat (Proxy :: Proxy (IsState s)) . _state
 
+-- | Obtain the state environment.
 get :: (HasState s m) => m s
 get = state (\s -> (s,s))
 
+-- | Apply a function to the stateful environment.  Equivalent to
+--   @fmap f 'get'@.
 gets :: (HasState s m) => (s -> a) -> m a
 gets f = state (\s -> (f s, s))
 
+-- | Replace the stateful environment.
 put :: (HasState s m) => s -> m ()
 put s = state (const ((),s))
 
+-- | Map the old state to a new state, and discard the old one.
+--   Equivalent to @'gets' f >>= 'put'@.
 modify :: (HasState s m) => (s -> s) -> m ()
 modify f = state (\ s -> ((), f s))
+
+-- | A variant of 'modify' in which the computation is strict in the
+--   new state.
+modify' :: (HasState s m) => (s -> s) -> m ()
+modify' f = state (\ s -> let s' = f s in s' `seq` ((), s'))
 
 -- -----------------------------------------------------------------------------
 

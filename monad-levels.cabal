@@ -24,6 +24,8 @@ library
                      , Control.Monad.Levels.Cont
                      , Control.Monad.Levels.Reader
                      , Control.Monad.Levels.State
+                     , Control.Monad.Levels.State.Lazy
+                     , Control.Monad.Levels.State.Strict
 
   other-modules:       Control.Monad.Levels.Definitions
                      , Control.Monad.Levels.ConstraintPassing
