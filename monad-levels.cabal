@@ -22,6 +22,7 @@ library
                      , Control.Monad.Levels.Transformers
 
                      , Control.Monad.Levels.Cont
+                     , Control.Monad.Levels.Except
                      , Control.Monad.Levels.Reader
                      , Control.Monad.Levels.State
                      , Control.Monad.Levels.State.Lazy
