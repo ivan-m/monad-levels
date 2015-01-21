@@ -9,16 +9,18 @@
    License     : 3-Clause BSD-style
    Maintainer  : Ivan.Miljenovic@gmail.com
 
-
+Provides a shared environment for reading values and executing
+sub-computations in a modified environment.
 
  -}
 module Control.Monad.Levels.Reader
-  ( ReaderT(..)
-  , ask
+  ( ask
   , asks
   , reader
   , local
+  , ReaderT(..)
   , HasReader
+  , IsReader
   ) where
 
 import Control.Monad.Levels
@@ -34,6 +36,8 @@ import           Data.Monoid
 
 -- -----------------------------------------------------------------------------
 
+-- | The minimal definitions needed by a monad providing a Reader
+--   environment.
 class (MonadTower m) => IsReader r m where
 
   _local :: (r -> r) -> m a -> m a
@@ -50,17 +54,23 @@ type family SameReader r m where
   SameReader r (SRWS.RWST r w s m) = True
   SameReader r m                   = False
 
+-- | A monad stack containing a Reader environment of type @r@.
 type HasReader r m = SatisfyConstraint (IsReader r) m
 
+-- | Execute a computation in a modified environment.
 local :: forall r m a. (HasReader r m) => (r -> r) -> m a -> m a
 local = lowerFunction (Proxy :: Proxy (IsReader r)) . _local
 
+-- | Retrieve a function of the current environment.
 reader :: forall r m a. (HasReader r m) => (r -> a) -> m a
 reader = liftSat (Proxy :: Proxy (IsReader r)) . _reader
 
+-- | Obtain the reader environment.
 ask :: (HasReader r m) => m r
 ask = reader id
 
+-- | Retrieve a function of the current environment.  An alias of
+--   'reader'.
 asks :: (HasReader r m) => (r -> a) -> m a
 asks = reader
 
