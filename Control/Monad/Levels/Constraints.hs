@@ -125,7 +125,7 @@ instance (ConstraintPassThrough c m True, SatisfyConstraint_ n c (LowerMonad m))
   type CanLowerFunc_ f (Suc n) c m a = ( (CanLower f m a)
                                        , (CanLowerFunc_ (LowerV f m) n c (LowerMonad m) (InnerValue m a)))
 
-  _liftSat n c m = wrap (\ _unwrap addI -> addInternalM addI (_liftSat (predP n) c m))
+  _liftSat n c m = wrap (\ _unwrap addI -> addInternalM addI (_liftSat (predP n) c m) \\ addIntProof addI)
 
   _lower n c vf m a f = applyVFn vf m a (\ _unwrap _addI -> _lower (predP n)
                                                                    c
@@ -135,6 +135,7 @@ instance (ConstraintPassThrough c m True, SatisfyConstraint_ n c (LowerMonad m))
                                                                    f
                                                                    \\ validLowerFunc m vf
                                                                    \\ validSatFunc n c m vf)
+
 lowerP :: (MonadLevel m) => Proxy m -> Proxy (LowerMonad m)
 lowerP _ = Proxy
 {-# INLINE lowerP #-}
@@ -425,7 +426,7 @@ instance VariadicArg ValueOnly where
 
 instance LowerableVArg ValueOnly where
 
-  lowerVArg _ _ _ a _ addI = addInternal addI a
+  lowerVArg _ _ _ a _ addI = addInternal addI a \\ addIntProof addI
 
 -- | Represents the function @v1 -> v2@.
 data Func (v1 :: *) (v2 :: *)
