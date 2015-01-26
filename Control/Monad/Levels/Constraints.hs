@@ -1,7 +1,7 @@
 {-# LANGUAGE ConstraintKinds, DataKinds, DefaultSignatures, FlexibleContexts,
              FlexibleInstances, KindSignatures, MultiParamTypeClasses,
-             RankNTypes, ScopedTypeVariables, TypeFamilies, TypeOperators,
-             UndecidableInstances #-}
+             RankNTypes, ScopedTypeVariables, TupleSections, TypeFamilies,
+             TypeOperators, UndecidableInstances #-}
 
 -- unsafeCoerceConstraint is used to prevent the need for a complex
 -- induction proof (which I'm not sure can actually be achieved).
@@ -52,6 +52,7 @@ module Control.Monad.Levels.Constraints
        , Const
        , MonadicValue
        , MonadicOther
+       , MonadicTuple
          -- * Re-exported for convenience
        , Proxy(..)
        ) where
@@ -61,7 +62,8 @@ import Control.Monad.Levels.Definitions
 
 import Data.Constraint
 import Data.Constraint.Unsafe (unsafeCoerceConstraint)
-import Data.Proxy             (Proxy (..))
+import Data.Monoid            (Monoid (mempty))
+import Data.Proxy             (Proxy (..), asProxyTypeOf)
 
 -- -----------------------------------------------------------------------------
 
@@ -280,6 +282,8 @@ class VariadicLower v where
 --
 --   [@'MonadicOther' b@] corresponds to @m b@.
 --
+--   [@'MonadicTuple' b@] corresponds to @m (a,b)@.
+--
 --   [@'Func' v1 v2@] corresponds to @v1 -> v2@.
 class (VariadicLower v) => VariadicArg v where
 
@@ -413,6 +417,42 @@ instance LiftableVArg (MonadicOther b) where
   validLiftArg _ _ = Sub Dict
 
   liftVArg _ _ _ m _ _ = wrap (\ _ _ -> m)
+
+-- | Corresponds to @m (a,b)@.  This requires the extra constraints of
+--   @'CanAddInternal' m@ and @'AllowOtherValues' m ~ True@ (This is
+--   used instead of 'CanUnwrap' as a simplification).
+data MonadicTuple b
+
+instance VariadicLower (MonadicTuple b) where
+  type CanLower (MonadicTuple b) m a = (CanGetInternal m, AllowOtherValues m ~ True)
+
+instance VariadicArg (MonadicTuple b) where
+  type VariadicType (MonadicTuple b) m a = m (a,b)
+
+instance (Monoid b) => LowerableVArg (MonadicTuple b) where
+
+  lowerVArg v _ a lm unwrap addI = fmap shiftI (unwrap lm)
+    where
+      b = tupleProxy v
+
+      ab = proxyPair a b
+
+      shiftI iv = let bv = getInternal addI mempty (snd . (`asProxyTypeOf` ab)) iv
+                  in (mapInternal addI (fst . (`asProxyTypeOf` ab)) iv, bv)
+
+tupleProxy :: Proxy (MonadicTuple b) -> Proxy b
+tupleProxy _ = Proxy
+{-# INLINE tupleProxy #-}
+
+proxyPair :: Proxy a -> Proxy b -> Proxy (a,b)
+proxyPair _ _ = Proxy
+{-# INLINE proxyPair #-}
+
+instance LiftableVArg (MonadicTuple b) where
+
+  liftVArg _ _ a mab _ addI = wrap ( \ _ _ -> fmap shiftI mab)
+    where
+      shiftI (iva,b) = mapInternal addI ((,b) . (`asProxyTypeOf`a)) iva
 
 -- | This corresponds to @a@ when the final result is @m a@.  This
 --   requires the extra constraint of @'CanAddInternal' m@.
