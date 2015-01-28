@@ -35,10 +35,18 @@ import Control.Monad.Levels.Constraints
 import Control.Monad.Levels.Definitions
 import Control.Monad.Levels.Transformers
 
+import Data.Constraint ((\\))
+
 -- -----------------------------------------------------------------------------
 
-lift :: (MonadLevel m) => LowerMonad m a -> m a
-lift m = wrap $ \ _unwrap addI -> addInternalM addI m
+lift :: forall m a. (MonadLevel m) => LowerMonad m a -> m a
+lift lm = wrap a (\ _unwrap addI -> addInternalM addI lm) \\ proofInst m a
+  where
+    m :: Proxy m
+    m = Proxy
+
+    a :: Proxy a
+    a = Proxy
 
 -- | Ideally, this alias would not be needed as every instance of
 --   'MonadTower' should satisfy the required constraint.  However,

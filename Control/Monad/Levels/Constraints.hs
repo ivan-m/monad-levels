@@ -34,6 +34,7 @@ module Control.Monad.Levels.Constraints
          -- ** Internal types and classes
        , SatisfyConstraint_(SatMonad_, SatValue_, CanLowerFunc_)
        , SatDepth
+       , proofInst
          -- * Variadic functions
        , VariadicFunction
        , VarFunction
@@ -94,7 +95,7 @@ class (ValidConstraint c, MonadTower m) => SatisfyConstraint_ (n :: Nat) c m whe
   --   'VariadicFunction' @f@ to the satisfying monad.
   type CanLowerFunc_ f n c m a :: Constraint
 
-  _liftSat :: Proxy n -> Proxy c -> SatMonad_ n c m a -> m a
+  _liftSat :: Proxy n -> Proxy c -> Proxy m -> Proxy a -> SatMonad_ n c m a -> m a
 
   _lower :: (VariadicFunction f, CanLowerFunc_ f n c m a)
             => Proxy n -> Proxy c -> Proxy f -> Proxy m -> Proxy a
@@ -110,7 +111,7 @@ instance (ValidConstraint c, MonadTower m, c m) => SatisfyConstraint_ Zero c m w
 
   type CanLowerFunc_ f Zero c m a = ()
 
-  _liftSat _ _ m = m
+  _liftSat _ _ _ _ m = m
 
   _lower _n c vf m _a f = f \\ validSatFunc0 c m vf
 
@@ -127,7 +128,8 @@ instance (ConstraintPassThrough c m True, SatisfyConstraint_ n c (LowerMonad m))
   type CanLowerFunc_ f (Suc n) c m a = ( (CanLower f m a)
                                        , (CanLowerFunc_ (LowerV f m) n c (LowerMonad m) (InnerValue m a)))
 
-  _liftSat n c m = wrap (\ _unwrap addI -> addInternalM addI (_liftSat (predP n) c m) \\ addIntProof addI)
+  _liftSat n c m a sm = wrap a (\ _unwrap addI -> addInternalM addI (_liftSat (predP n) c (lowerP m) a sm))
+                        \\ proofInst m a
 
   _lower n c vf m a f = applyVFn vf m a (\ _unwrap _addI -> _lower (predP n)
                                                                    c
@@ -158,7 +160,7 @@ type SatisfyConstraint c m = ( SatisfyConstraint_ (SatDepth c m) c m
 
 -- | An extension of 'SatisfyConstraint' that also ensures that any
 --   additional constraints needed to satisfy a 'VariadicFunction' @f@
---   to achieve an end result of type @m a@ are met.
+--   to achieve an end result based upon the type @m a@ are met.
 type SatisfyConstraintF c m a f = ( SatisfyConstraint c m
                                   , VariadicFunction f
                                   , CanLowerFunc f c m a)
@@ -174,7 +176,7 @@ type CanLowerFunc f c m a = CanLowerFunc_ f (SatDepth c m) c m a
 -- | Lift a value of the satisfying monad to the top of the tower.
 liftSat :: forall c m a. (SatisfyConstraint c m) =>
            Proxy c -> SatMonad c m a -> m a
-liftSat p m = _liftSat (Proxy :: Proxy (SatDepth c m)) p m
+liftSat p = _liftSat (Proxy :: Proxy (SatDepth c m)) p (Proxy :: Proxy m) (Proxy :: Proxy a)
 
 -- | The type of the 'VariadicFunction' @f@ when the provided
 --   constraint is satisfied.
@@ -382,8 +384,11 @@ instance LowerableVArg MonadicValue where
 
 instance LiftableVArg MonadicValue where
 
-  liftVArg  _ _ _ m _      _ = wrap (\ _ _ -> m)
+  liftVArg _ m a mv _      _ = wrap a (\ _ _ -> mv) \\ proofInst m a
 
+-- | Whilst 'MonadLevel' requires @CanUnwrap m a a@ for all @a@, the
+--   type system can't always determine this.  This is a helper
+--   function to do so.
 proofInst :: (MonadLevel m) => Proxy m -> Proxy a -> (MonadLevel m :- CanUnwrap m a a)
 proofInst _ _ = getUnwrapSelfProof
 {-# INLINE proofInst #-}
@@ -416,7 +421,7 @@ instance LiftableVArg (MonadicOther b) where
 
   validLiftArg _ _ = Sub Dict
 
-  liftVArg _ _ _ m _ _ = wrap (\ _ _ -> m)
+  liftVArg _ _ a m _ _ = wrap a (\ _ _ -> m)
 
 -- | Corresponds to @m (a,b)@.  This requires the extra constraints of
 --   @'CanAddInternal' m@ and @'AllowOtherValues' m ~ True@ (This is
@@ -450,7 +455,7 @@ proxyPair _ _ = Proxy
 
 instance LiftableVArg (MonadicTuple b) where
 
-  liftVArg _ _ a mab _ addI = wrap ( \ _ _ -> fmap shiftI mab)
+  liftVArg _ _ a mab _ addI = wrap a ( \ _ _ -> fmap shiftI mab)
     where
       shiftI (iva,b) = mapInternal addI ((,b) . (`asProxyTypeOf`a)) iva
 
@@ -576,8 +581,9 @@ instance (LowerableVArg va) => VariadicFunction (MkVarFn va) where
 
   validSatFunc n c m pmf = Sub Dict \\ validSatArg n c m (pmvf pmf)
 
-  applyVFn pmf m a f va = wrap (\ unwrap addI ->
-                                f unwrap addI (lowerVArg (pmvf pmf) m a va unwrap addI))
+  applyVFn pmf m a f va = wrap a (\ unwrap addI ->
+                                  f unwrap addI (lowerVArg (pmvf pmf) m a va unwrap addI))
+                          \\ proofInst m a
 
 instance (LowerableVArg va, VariadicFunction vf) => VariadicFunction (Func va vf) where
   type VarFunction (Func va vf) m a = (VariadicType va m a) -> VarFunction vf m a

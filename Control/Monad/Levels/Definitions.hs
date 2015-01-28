@@ -118,7 +118,8 @@ class (MonadTower m, MonadTower (LowerMonad m)
   type DefaultAllowConstraints m :: Bool
   type DefaultAllowConstraints m = True
 
-  wrap :: (Unwrapper m a (LowerMonadValue m a)) -> m a
+  wrap :: (CanUnwrap m a b) => Proxy a
+          -> (Unwrapper m a (LowerMonadValue m b)) -> m b
 
 type CanUnwrap_ m a b = CheckOtherAllowed (AllowOtherValues m) a b
 
@@ -237,19 +238,19 @@ instance (MonadTower m) => MonadLevel_ (ContT r m) where
   type AllowOtherValues (ContT r m) = False
   type DefaultAllowConstraints (ContT r m) = False
 
-  wrap f = ContT $ \ cont -> f (`runContT` cont) (AddIM (>>= cont))
+  wrap _ f = ContT $ \ cont -> f (`runContT` cont) (AddIM (>>= cont))
 
 instance (MonadTower m) => MonadLevel_ (ExceptT e m) where
   type LowerMonad (ExceptT e m) = m
   type InnerValue (ExceptT e m) a = Either e a
   type WithLower_ (ExceptT e m) = AddI
 
-  wrap f = ExceptT $ f runExceptT (AddI Right fmap)
+  wrap _ f = ExceptT $ f runExceptT (AddI Right fmap)
 
 instance (MonadTower m) => MonadLevel_ (IdentityT m) where
   type LowerMonad (IdentityT m) = m
 
-  wrap f = IdentityT $ f runIdentityT AddIdent
+  wrap _ f = IdentityT $ f runIdentityT AddIdent
 
 instance (MonadTower m) => MonadLevel_ (ListT m) where
   type LowerMonad (ListT m) = m
@@ -257,19 +258,19 @@ instance (MonadTower m) => MonadLevel_ (ListT m) where
   type WithLower_ (ListT m) = AddI
   type DefaultAllowConstraints (ListT m) = False
 
-  wrap f = ListT $ f runListT (AddI (:[]) map)
+  wrap _ f = ListT $ f runListT (AddI (:[]) map)
 
 instance (MonadTower m) => MonadLevel_ (MaybeT m) where
   type LowerMonad (MaybeT m) = m
   type InnerValue (MaybeT m) a = Maybe a
   type WithLower_ (MaybeT m) = AddI
 
-  wrap f = MaybeT $ f runMaybeT (AddI Just fmap)
+  wrap _ f = MaybeT $ f runMaybeT (AddI Just fmap)
 
 instance (MonadTower m) => MonadLevel_ (ReaderT r m) where
   type LowerMonad (ReaderT r m) = m
 
-  wrap f = ReaderT $ \ r -> f (`runReaderT` r) AddIdent
+  wrap _ f = ReaderT $ \ r -> f (`runReaderT` r) AddIdent
 
 map1 :: (a -> a') -> (a,b,c) -> (a',b,c)
 map1 f (a,b,c) = (f a,b,c)
@@ -280,42 +281,42 @@ instance (Monoid w, MonadTower m) => MonadLevel_ (LRWS.RWST r w s m) where
   type InnerValue (LRWS.RWST r w s m) a = (a,s,w)
   type WithLower_ (LRWS.RWST r w s m) = AddI
 
-  wrap f = LRWS.RWST $ \ r s -> f (\m -> LRWS.runRWST m r s) (AddI (,s,mempty) map1)
+  wrap _ f = LRWS.RWST $ \ r s -> f (\m -> LRWS.runRWST m r s) (AddI (,s,mempty) map1)
 
 instance (Monoid w, MonadTower m) => MonadLevel_ (SRWS.RWST r w s m) where
   type LowerMonad (SRWS.RWST r w s m) = m
   type InnerValue (SRWS.RWST r w s m) a = (a,s,w)
   type WithLower_ (SRWS.RWST r w s m) = AddI
 
-  wrap f = SRWS.RWST $ \ r s -> f (\m -> SRWS.runRWST m r s) (AddI (,s,mempty) map1)
+  wrap _ f = SRWS.RWST $ \ r s -> f (\m -> SRWS.runRWST m r s) (AddI (,s,mempty) map1)
 
 instance (MonadTower m) => MonadLevel_ (LSt.StateT s m) where
   type LowerMonad (LSt.StateT s m) = m
   type InnerValue (LSt.StateT s m) a = (a,s)
   type WithLower_ (LSt.StateT s m) = AddI
 
-  wrap f = LSt.StateT $ \ s -> f (`LSt.runStateT` s) (AddI (,s) first)
+  wrap _ f = LSt.StateT $ \ s -> f (`LSt.runStateT` s) (AddI (,s) first)
 
 instance (MonadTower m) => MonadLevel_ (SSt.StateT s m) where
   type LowerMonad (SSt.StateT s m) = m
   type InnerValue (SSt.StateT s m) a = (a,s)
   type WithLower_ (SSt.StateT s m) = AddI
 
-  wrap f = SSt.StateT $ \ s -> f (`SSt.runStateT` s) (AddI (,s) first)
+  wrap _ f = SSt.StateT $ \ s -> f (`SSt.runStateT` s) (AddI (,s) first)
 
 instance (Monoid w, MonadTower m) => MonadLevel_ (LW.WriterT w m) where
   type LowerMonad (LW.WriterT w m) = m
   type InnerValue (LW.WriterT w m) a = (a,w)
   type WithLower_ (LW.WriterT w m) = AddI
 
-  wrap f = LW.WriterT $ f LW.runWriterT (AddI (,mempty) first)
+  wrap _ f = LW.WriterT $ f LW.runWriterT (AddI (,mempty) first)
 
 instance (Monoid w, MonadTower m) => MonadLevel_ (SW.WriterT w m) where
   type LowerMonad (SW.WriterT w m) = m
   type InnerValue (SW.WriterT w m) a = (a,w)
   type WithLower_ (SW.WriterT w m) = AddI
 
-  wrap f = SW.WriterT $ f SW.runWriterT (AddI (,mempty) first)
+  wrap _ f = SW.WriterT $ f SW.runWriterT (AddI (,mempty) first)
 
 -- -----------------------------------------------------------------------------
 
