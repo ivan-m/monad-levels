@@ -44,11 +44,13 @@ module Control.Monad.Levels.Constraints
        , CanLower
        , VarFunctionSat
        , MkVarFn
+       , MkVarFnFrom
        , Func
          -- ** Variadic arguments
        , VariadicArg(VariadicType)
        , LowerableVArg
        , LiftableVArg
+       , WrappableVArg
        , ValueOnly
        , Const
        , MonadicValue
@@ -273,8 +275,8 @@ class VariadicLower v where
 -- | Class representing arguments\/parameters for lower-able variadic
 --   functions.
 --
---   When considering a function with an end result of @m a@, the
---   following argument types are available:
+--   When considering a function with an end result based upon @m a@,
+--   the following argument types are available:
 --
 --   [@'ValueOnly'@] corresponds to @a@.
 --
@@ -350,6 +352,20 @@ class (VariadicArg v) => LiftableVArg v where
               -> LowerVArg v m a
               -> Unwrapper m a (VariadicType v m a)
 
+-- | Variadic arguments that can be lifted via a call to 'wrap'.  Only
+--   those that have a 'VariadicType' that is a monadic value can thus
+--   be instances of this class.
+class (LiftableVArg v) => WrappableVArg v where
+
+  validWrapArg :: (MonadLevel m) => Proxy m -> Proxy v -> MonadLevel m :- WrappableVArg (LowerV v m)
+  default validWrapArg :: (MonadLevel m, LowerV v m ~ v)
+                          => Proxy m -> Proxy v -> MonadLevel m :- WrappableVArg v
+  validWrapArg _ _ = Sub Dict
+
+  wrapVArg :: (MonadLevel m, CanLower v m a)
+              => Proxy v -> Proxy m -> Proxy a
+              -> Unwrapper m a (LowerVArg v m a) -> VariadicType v m a
+
 type LowerVArg v m a = VariadicType (LowerV v m) (LowerMonad m) (InnerValue m a)
 
 -- | A constant type that does not depend upon the current monadic
@@ -386,6 +402,10 @@ instance LiftableVArg MonadicValue where
 
   liftVArg _ m a mv _      _ = wrap a (\ _ _ -> mv) \\ proofInst m a
 
+instance WrappableVArg MonadicValue where
+
+  wrapVArg _ m a f = wrap a f \\ proofInst m a
+
 -- | Whilst 'MonadLevel' requires @CanUnwrap m a a@ for all @a@, the
 --   type system can't always determine this.  This is a helper
 --   function to do so.
@@ -393,8 +413,8 @@ proofInst :: (MonadLevel m) => Proxy m -> Proxy a -> (MonadLevel m :- CanUnwrap 
 proofInst _ _ = getUnwrapSelfProof
 {-# INLINE proofInst #-}
 
--- | Corresponds to @m b@, where the final result is @m a@.  This
---   requires the extra constraint of @'CanUnwrap' m a b@.
+-- | Corresponds to @m b@, where the final result is based upon @m a@.
+--   This requires the extra constraint of @'CanUnwrap' m a b@.
 data MonadicOther b
 
 instance VariadicLower (MonadicOther b) where
@@ -422,6 +442,12 @@ instance LiftableVArg (MonadicOther b) where
   validLiftArg _ _ = Sub Dict
 
   liftVArg _ _ a m _ _ = wrap a (\ _ _ -> m)
+
+instance WrappableVArg (MonadicOther b) where
+
+  validWrapArg _ _ = Sub Dict
+
+  wrapVArg _ _ a f = wrap a f
 
 -- | Corresponds to @m (a,b)@.  This requires the extra constraints of
 --   @'CanAddInternal' m@ and @'AllowOtherValues' m ~ True@ (This is
@@ -459,8 +485,14 @@ instance LiftableVArg (MonadicTuple b) where
     where
       shiftI (iva,b) = mapInternal addI ((,b) . (`asProxyTypeOf`a)) iva
 
--- | This corresponds to @a@ when the final result is @m a@.  This
---   requires the extra constraint of @'CanAddInternal' m@.
+instance WrappableVArg (MonadicTuple b) where
+
+  wrapVArg _ _ a f = wrap a ( \ unwrap addI -> fmap (shiftI addI) (f unwrap addI))
+    where
+      shiftI ai (iva, b) = mapInternal ai ((,b) . (`asProxyTypeOf`a)) iva
+
+-- | This corresponds to @a@ when the final result is based upon @m
+--   a@.  This requires the extra constraint of @'CanAddInternal' m@.
 data ValueOnly
 
 instance VariadicLower ValueOnly where
@@ -521,11 +553,11 @@ instance (LowerableVArg va, LiftableVArg vb) => LiftableVArg (Func va vb) where
       . (\ v -> lowerVArg (pfa pf) m a v unwrap addI)
 
 -- | A function composed of variadic arguments that produces a value
---   of type @m a@.
+--   based upon the type @m a@.
 class (VariadicLower f) => VariadicFunction f where
 
-  -- | The function (that produces a value of type @m a@) that this
-  --   instance corresponds to.
+  -- | The function (that produces a value based upon the type @m a@)
+  --   that this instance corresponds to.
   type VarFunction f (m :: * -> *) a
 
   validLowerFunc :: (MonadLevel m) => Proxy m -> Proxy f -> MonadLevel m :- VariadicFunction (LowerV f m)
@@ -559,31 +591,33 @@ plowerF _ _ = Proxy
 --
 --   If more than one argument is needed for a function, they can be
 --   prepended on using 'Func'.
-data MkVarFn v
+type MkVarFn v = Func v (MkVarFnFrom MonadicValue)
 
-pmvf :: Proxy (MkVarFn va) -> Proxy va
-pmvf _ = Proxy
+-- | The result of a 'VariadicFunction'. This can't be used on its
+--   own, and needs to have at least one 'Func' attached to it.
+data MkVarFnFrom va
 
-instance (VariadicLower va) => VariadicLower (MkVarFn va) where
-  type LowerV (MkVarFn va) m = MkVarFn (LowerV va m)
+pmvff :: Proxy (MkVarFnFrom va) -> Proxy va
+pmvff _ = Proxy
 
-  type SatV (MkVarFn va) n c m = MkVarFn (SatV va n c m)
+instance (VariadicLower va) => VariadicLower (MkVarFnFrom va) where
+  type LowerV (MkVarFnFrom va) m = MkVarFnFrom (LowerV va m)
 
-  type CanLower (MkVarFn va) m a = CanLower va m a
+  type SatV (MkVarFnFrom va) n c m = MkVarFnFrom (SatV va n c m)
 
-instance (LowerableVArg va) => VariadicFunction (MkVarFn va) where
+  type CanLower (MkVarFnFrom va) m a = CanLower va m a
 
-  type VarFunction (MkVarFn va) m a = VariadicType va m a -> m a
+instance (WrappableVArg va) => VariadicFunction (MkVarFnFrom va) where
 
-  validLowerFunc m pmf = Sub Dict \\ validLowerArg m (pmvf pmf)
+  type VarFunction (MkVarFnFrom va) m a = VariadicType va m a
 
-  validSatFunc0 c m pmf = Sub Dict \\ validSatArg0 c m (pmvf pmf)
+  validLowerFunc m pmf = Sub Dict \\ validWrapArg m (pmvff pmf)
 
-  validSatFunc n c m pmf = Sub Dict \\ validSatArg n c m (pmvf pmf)
+  validSatFunc0 c m pmf = Sub Dict \\ validSatArg0 c m (pmvff pmf)
 
-  applyVFn pmf m a f va = wrap a (\ unwrap addI ->
-                                  f unwrap addI (lowerVArg (pmvf pmf) m a va unwrap addI))
-                          \\ proofInst m a
+  validSatFunc n c m pmf = Sub Dict \\ validSatArg n c m (pmvff pmf)
+
+  applyVFn pmf m a f = wrapVArg (pmvff pmf) m a f
 
 instance (LowerableVArg va, VariadicFunction vf) => VariadicFunction (Func va vf) where
   type VarFunction (Func va vf) m a = (VariadicType va m a) -> VarFunction vf m a
