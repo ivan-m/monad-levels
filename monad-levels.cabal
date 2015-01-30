@@ -27,6 +27,9 @@ library
                      , Control.Monad.Levels.State
                      , Control.Monad.Levels.State.Lazy
                      , Control.Monad.Levels.State.Strict
+                     , Control.Monad.Levels.Writer
+                     , Control.Monad.Levels.Writer.Lazy
+                     , Control.Monad.Levels.Writer.Strict
 
   other-modules:       Control.Monad.Levels.Definitions
                      , Control.Monad.Levels.ConstraintPassing
