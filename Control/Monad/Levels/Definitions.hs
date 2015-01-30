@@ -14,10 +14,11 @@
  -}
 module Control.Monad.Levels.Definitions where
 
-import Control.Applicative
-import Data.Constraint
-import Data.Constraint.Forall
-import Data.Proxy
+import Control.Applicative    (Applicative, WrappedMonad)
+import Data.Constraint        ((:-) (..), Class (..), Constraint, Dict (..),
+                               trans, weaken1, weaken2, (\\))
+import Data.Constraint.Forall (Forall, inst)
+import Data.Proxy             (Proxy (..))
 
 import           Control.Monad.Trans.Cont          (ContT (..))
 import           Control.Monad.Trans.Except        (ExceptT (..), runExceptT)
@@ -31,7 +32,7 @@ import qualified Control.Monad.Trans.State.Lazy    as LSt
 import qualified Control.Monad.Trans.State.Strict  as SSt
 import qualified Control.Monad.Trans.Writer.Lazy   as LW
 import qualified Control.Monad.Trans.Writer.Strict as SW
-import           Data.Functor.Identity
+import           Data.Functor.Identity             (Identity (..))
 
 import Control.Arrow (first)
 import Data.Monoid   (Monoid, mempty)

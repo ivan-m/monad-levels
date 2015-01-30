@@ -63,7 +63,7 @@ module Control.Monad.Levels.Constraints
 import Control.Monad.Levels.ConstraintPassing
 import Control.Monad.Levels.Definitions
 
-import Data.Constraint
+import Data.Constraint        ((:-) (..), Constraint, Dict (..), (\\))
 import Data.Constraint.Unsafe (unsafeCoerceConstraint)
 import Data.Monoid            (Monoid (mempty))
 import Data.Proxy             (Proxy (..), asProxyTypeOf)
