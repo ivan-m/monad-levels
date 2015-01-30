@@ -31,6 +31,10 @@ library
                      , Control.Monad.Levels.Writer.Lazy
                      , Control.Monad.Levels.Writer.Strict
 
+                     , Control.Monad.Levels.RWS
+                     , Control.Monad.Levels.RWS.Lazy
+                     , Control.Monad.Levels.RWS.Strict
+
   other-modules:       Control.Monad.Levels.Definitions
                      , Control.Monad.Levels.ConstraintPassing
 
