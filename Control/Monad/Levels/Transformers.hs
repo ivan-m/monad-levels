@@ -24,6 +24,7 @@ import Control.Monad.Levels.Constraints
 import Control.Monad.Levels.Definitions
 
 import           Control.Monad.Trans.Cont         (ContT)
+import           Control.Monad.Trans.Except       (ExceptT)
 import           Control.Monad.Trans.List         (ListT)
 import           Control.Monad.Trans.Reader
 import qualified Control.Monad.Trans.State.Lazy   as LSt
@@ -62,11 +63,15 @@ liftT m = liftSat (Proxy :: Proxy (IsTransformer t)) m
 -- Note: RWS transformers aren't allowed for ContT and ListT as they
 -- don't allow passing through of Writer manipulations.
 
+instance (MonadLevel m) => ConstraintPassThrough (IsTransformer (ContT r)) (ListT m) True
+
+instance (MonadLevel m) => ConstraintPassThrough (IsTransformer (ExceptT e)) (ListT m) True
+
+instance (MonadLevel m) => ConstraintPassThrough (IsTransformer (ReaderT r)) (ContT c m) True
+instance (MonadLevel m) => ConstraintPassThrough (IsTransformer (ReaderT r)) (ListT m) True
+
 instance (MonadLevel m) => ConstraintPassThrough (IsTransformer (LSt.StateT s)) (ContT r m) True
 instance (MonadLevel m) => ConstraintPassThrough (IsTransformer (LSt.StateT s)) (ListT m) True
 
 instance (MonadLevel m) => ConstraintPassThrough (IsTransformer (SSt.StateT s)) (ContT r m) True
 instance (MonadLevel m) => ConstraintPassThrough (IsTransformer (SSt.StateT s)) (ListT m) True
-
-instance (MonadLevel m) => ConstraintPassThrough (IsTransformer (ReaderT r)) (ContT c m) True
-instance (MonadLevel m) => ConstraintPassThrough (IsTransformer (ReaderT r)) (ListT m) True

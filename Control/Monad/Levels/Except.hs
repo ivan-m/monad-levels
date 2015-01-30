@@ -32,6 +32,8 @@ import           Control.Exception          (IOException, catch)
 import           Control.Monad.Trans.Except (ExceptT (..))
 import qualified Control.Monad.Trans.Except as E
 
+import Control.Monad.Trans.List (ListT)
+
 -- -----------------------------------------------------------------------------
 
 -- | Constraint for monads that can throw and handle exceptions.
@@ -92,3 +94,7 @@ catchError = lowerSat' c vf m a (Sub Dict) _catchError
 
     a :: Proxy a
     a = Proxy
+
+-- -----------------------------------------------------------------------------
+
+instance (MonadTower m) => ConstraintPassThrough (IsError e) (ListT m) True

@@ -34,6 +34,8 @@ import Control.Monad.Levels.Constraints
 import           Control.Monad.Trans.Cont (ContT (..))
 import qualified Control.Monad.Trans.Cont as C
 
+import Control.Monad.Trans.List (ListT)
+
 -- -----------------------------------------------------------------------------
 
 -- We don't use the Transformer constraint here because there's
@@ -86,3 +88,7 @@ callCC = lowerSat c vf m a _callCC
 
     a :: Proxy a
     a = Proxy
+
+-- -----------------------------------------------------------------------------
+
+instance (MonadTower m) => ConstraintPassThrough IsCont (ListT m) True
