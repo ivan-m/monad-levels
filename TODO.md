@@ -11,6 +11,8 @@
     - Should variadic-functions be exported from Levels.hs?
     - Change Constraint synonyms to type-classes for better error
       reporting?
+    - Should VArgs be able to have different constraints for
+      lifting/lowering?
 
 * Documentation
 
