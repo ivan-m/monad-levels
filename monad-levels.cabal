@@ -15,6 +15,7 @@ maintainer:          Ivan.Miljenovic@gmail.com
 category:            Control
 build-type:          Simple
 extra-source-files:  README.md
+                     CHANGELOG.md
                      TODO.md
 cabal-version:       >=1.10
 
