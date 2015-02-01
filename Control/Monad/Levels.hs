@@ -13,10 +13,29 @@
 
  -}
 module Control.Monad.Levels
-       ( MonadTower_(..)
+       ( -- * Monadic stacks
+         MonadTower_(..)
        , MonadTower
        , MonadLevel_(..)
        , MonadLevel
+         -- * Helper types\/aliases
+       , Unwrapper
+       , LowerMonadValue
+       , WithLower
+       , CanUnwrap
+       , CanUnwrapSelf
+       , WithLowerC
+         -- ** Manipulating internal values
+       , AddInternalM(..)
+       , CanAddInternalM
+       , AddIM(..)
+       , AddInternal(..)
+       , CanAddInternal
+       , AddI(..)
+       , AddIdent(..)
+       , GetInternal(..)
+       , CanGetInternal
+       , AddIG(..)
          -- * Basic level manipulation
        , lift
          -- ** Lifting from the base

@@ -41,11 +41,22 @@ import Data.Monoid   (Monoid, mempty)
 
 -- -----------------------------------------------------------------------------
 
+-- | Monads in a monadic stack.
+--
+--   For monads that are /not/ instances of 'MonadicLevel_' then it
+--   suffices to say @instance MonadTower_ MyMonad@; for levels it is
+--   required to define 'BaseMonad' (typically recursively).
+--
+--   You should use 'MonadTower' in any constraints rather than this
+--   class.  This includes when writing instances of 'MonadTower_' for
+--   monadic transformers.
 class (Applicative m, Monad m) => MonadTower_ m where
 
   type BaseMonad m :: * -> *
   type BaseMonad m = m
 
+-- | This is 'MonadTower_' with additional sanity constraints to
+--   ensure that applying 'BaseMonad' is idempotent.
 type MonadTower m = ( MonadTower_ m, MonadTower_ (BaseMonad m)
                     , BaseMonad (BaseMonad m) ~ BaseMonad m
                     , BaseMonad m ~ BaseMonad (BaseMonad m))
@@ -99,6 +110,13 @@ instance (Monoid w, MonadTower m) => MonadTower_ (SW.WriterT w m) where
 
 -- -----------------------------------------------------------------------------
 
+-- | How to handle wrappers around existing 'MonadTower' instances.
+--
+--   For newtype wrappers (e.g. 'IdentityT'), it is sufficient to only
+--   define 'LowerMonad'.
+--
+--   You should use 'MonadLevel' rather than this class in
+--   constraints.
 class (MonadTower m, MonadTower (LowerMonad m)
       , BaseMonad m ~ BaseMonad (LowerMonad m), BaseMonad (LowerMonad m) ~ BaseMonad m
       , CanAddInternalM m)
@@ -106,21 +124,32 @@ class (MonadTower m, MonadTower (LowerMonad m)
 
   type LowerMonad m :: * -> *
 
+  -- | How the value is represented internally; defaults to @a@.
   type InnerValue m a :: *
   type InnerValue m a = a
 
+  -- | An instance of 'AddInternalM'; this is defined so as to be able
+  --   to make it easier to add constraints rather than solely relying
+  --   upon its value within 'Unwrapper'.
   type WithLower_ m :: (* -> *) -> * -> *
   type WithLower_ m = AddIdent
 
   -- | Within the continuation for 'wrap' for @m a@, we can unwrap any
   --   @m b@ if @AllowOtherValues m ~ True@; otherwise, we can only
-  --   unwrap @m a@.
+  --   unwrap @m a@.  Defaults to @True@.
   type AllowOtherValues m :: Bool
   type AllowOtherValues m = True
 
+  -- | By default, should all constraints be allowed through this
+  --   level?  Defaults to @True@.
   type DefaultAllowConstraints m :: Bool
   type DefaultAllowConstraints m = True
 
+  -- | A continuation-based approach to create a value of this level.
+  --
+  --   A default is provided for newtype wrappers around existing
+  --   'MonadTower' instances, provided that - with the exception of
+  --   'LowerMonad' - all associated types are left as their defaults.
   wrap :: (CanUnwrap m a b) => Proxy a
           -> (Unwrapper m a (LowerMonadValue m b)) -> m b
   default wrap :: (Forall (IsCoercible m), Forall (InnerSame m)
@@ -159,9 +188,16 @@ type family CheckOtherAllowed (allowed::Bool) a b :: Constraint where
   CheckOtherAllowed True  a b = ()
   CheckOtherAllowed False a b = (a ~ b)
 
+-- | If we're dealing overall with @m a@, then this allows us to
+--   specify those @b@ values for which we can also manipulate @m b@.
+--
+--   If @'AllowOtherValues' m ~ False@ then we require that @a ~ b@;
+--   otherwise, any @b@ is accepted.
 class (MonadLevel_ m, CanUnwrap_ m a b) => CanUnwrap m a b
 instance (MonadLevel_ m, CanUnwrap_ m a b) => CanUnwrap m a b
 
+-- | Used to ensure that for all monad levels, @CanUnwrap m a a@ is
+--   satisfied.
 class (MonadLevel_ m, CanUnwrap m a a) => CanUnwrapSelf m a
 instance (MonadLevel_ m, CanUnwrap m a a) => CanUnwrapSelf m a
 
@@ -178,10 +214,14 @@ getUnwrapSelfProof = trans weaken2                       -- CanUnwrap
                                    )
                            )
 
+-- | This is 'MonadLevel_' with some additional sanity constraints.
 type MonadLevel m = (MonadLevel_ m, (Forall (CanUnwrapSelf m), WithLowerC m))
 
+-- | The value contained within the actual level (e.g. for
+--   @'LSt.StateT' s m a@, this is equivalent to @m (a,s)@).
 type LowerMonadValue m a = LowerMonad m (InnerValue m a)
 
+-- | A continuation function to produce a value of type @t@.
 type Unwrapper m a t =    (forall b. (CanUnwrap m a b) => m b -> LowerMonadValue m b)
                        -> (WithLower m a)
                        -> t
@@ -210,15 +250,23 @@ class (AddInternalM ai) => AddInternal ai where
                  => ai m a -> (b -> c) -> InnerValue m b -> InnerValue m c
 
 class (AddInternal ai) => GetInternal ai where
+  -- | This is like a lifted 'maybe' function that applies to
+  --   'InnerValue' values rather than just 'Maybe's.
   getInternal :: (MonadLevel m, WithLower_ m ~ ai, CanUnwrap m a b)
                  => ai m a -> c -> (b -> c) -> InnerValue m b -> c
 
+-- | Used for monad transformers like 'ContT' where it is not possible
+--   to manipulate the internal value without considering the monad
+--   that it is within.
 newtype AddIM m a = AddIM { addIMFunc :: forall b. (CanUnwrap m a b)
                                          => LowerMonad m b -> LowerMonadValue m b }
 
 instance AddInternalM AddIM where
   addInternalM = addIMFunc
 
+-- | In most cases you will want to use 'AddIG' instead of this; this
+--   is defined for cases like 'ListT' where it may not be possible to
+--   obtain either zero or one value for use with 'getInternal'.
 data AddI m a = AddI { setIFunc :: forall b. (CanUnwrap m a b) => b -> InnerValue m b
                      , mapIFunc :: forall b c. (CanUnwrap m a b, CanUnwrap m a c)
                                                => (b -> c) -> InnerValue m b -> InnerValue m c
@@ -235,6 +283,9 @@ instance AddInternal AddI where
 
   mapInternal = mapIFunc
 
+-- | Used for monad transformers where it is possible to consider the
+--   'InnerValue' in isolation.  If @InnerValue m a ~ a@ then use
+--   'AddIdent' instead.
 data AddIG m a = AddIG { setIUFunc :: forall b. (CanUnwrap m a b) => b -> InnerValue m b
                        , mapIUFunc :: forall b c. (CanUnwrap m a b, CanUnwrap m a c)
                                                   => (b -> c) -> InnerValue m b -> InnerValue m c
@@ -253,6 +304,7 @@ instance AddInternal AddIG where
 instance GetInternal AddIG where
   getInternal = getIUFunc
 
+-- | Used for monad transformers where @'InnerValue' m a ~ a@.
 data AddIdent (m :: * -> *) a = AddIdent
 
 instance AddInternalM AddIdent where
