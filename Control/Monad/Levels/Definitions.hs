@@ -1,6 +1,7 @@
-{-# LANGUAGE ConstraintKinds, DataKinds, FlexibleContexts, FlexibleInstances,
-             MultiParamTypeClasses, RankNTypes, TupleSections, TypeFamilies,
-             TypeOperators, UndecidableInstances #-}
+{-# LANGUAGE ConstraintKinds, DataKinds, DefaultSignatures, FlexibleContexts,
+             FlexibleInstances, MultiParamTypeClasses, RankNTypes,
+             ScopedTypeVariables, TupleSections, TypeFamilies, TypeOperators,
+             UndecidableInstances #-}
 
 {- |
    Module      : Control.Monad.Levels.Definitions
@@ -15,6 +16,7 @@
 module Control.Monad.Levels.Definitions where
 
 import Control.Applicative    (Applicative, WrappedMonad)
+import Data.Coerce            (Coercible, coerce)
 import Data.Constraint        ((:-) (..), Class (..), Constraint, Dict (..),
                                trans, weaken1, weaken2, (\\))
 import Data.Constraint.Forall (Forall, inst)
@@ -121,6 +123,35 @@ class (MonadTower m, MonadTower (LowerMonad m)
 
   wrap :: (CanUnwrap m a b) => Proxy a
           -> (Unwrapper m a (LowerMonadValue m b)) -> m b
+  default wrap :: (Forall (IsCoercible m), Forall (InnerSame m)
+                  , WithLower_ m ~ AddIdent, AllowOtherValues m ~ True, DefaultAllowConstraints m ~ True)
+                  => Proxy a -> (Unwrapper m a (LowerMonadValue m b)) -> m b
+  wrap = coerceWrap
+
+coerceWrap :: forall m a b. (MonadLevel_ m, Forall (IsCoercible m), Forall (InnerSame m)
+                            , WithLower_ m ~ AddIdent, AllowOtherValues m ~ True, DefaultAllowConstraints m ~ True)
+                            => Proxy a -> (Unwrapper m a (LowerMonadValue m b)) -> m b
+coerceWrap _ f = pack (f unpack AddIdent)
+  where
+    pack :: LowerMonadValue m b -> m b
+    pack = coerce \\ (inst :: Forall (InnerSame m) :- InnerSame m b)
+                  \\ (inst :: Forall (IsCoercible m) :- IsCoercible m b)
+
+    unpack :: m c -> LowerMonadValue m c
+    unpack = coerceUnwrap
+{-# INLINE coerceWrap #-}
+
+coerceUnwrap :: forall m c. (MonadLevel m, Forall (IsCoercible m), Forall (InnerSame m))
+                            => m c -> LowerMonadValue m c
+coerceUnwrap = coerce \\ (inst :: Forall (InnerSame m) :- InnerSame m c)
+                      \\ (inst :: Forall (IsCoercible m) :- IsCoercible m c)
+{-# INLINE coerceUnwrap #-}
+
+class (MonadLevel m, Coercible (m a) (LowerMonadValue m a), Coercible (LowerMonadValue m a) (m a))
+      => IsCoercible m a
+
+instance (MonadLevel m, Coercible (m a) (LowerMonadValue m a), Coercible (LowerMonadValue m a) (m a))
+         => IsCoercible m a
 
 type CanUnwrap_ m a b = CheckOtherAllowed (AllowOtherValues m) a b
 
@@ -277,7 +308,8 @@ instance (MonadTower m) => MonadLevel_ (ExceptT e m) where
 instance (MonadTower m) => MonadLevel_ (IdentityT m) where
   type LowerMonad (IdentityT m) = m
 
-  wrap _ f = IdentityT $ f runIdentityT AddIdent
+  -- Using default coerce-based implementation as a test.
+  -- wrap _ f = IdentityT $ f runIdentityT AddIdent
 
 instance (MonadTower m) => MonadLevel_ (ListT m) where
   type LowerMonad (ListT m) = m

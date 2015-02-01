@@ -1,7 +1,5 @@
 * Finish off re-implementing all mtl classes.
 
-* Make it easier to add newtype wrappers around transformer stacks.
-
 * Implement being able to change out the underlying stack from a
   transformer (e.g. `StateT s m a -> StateT s n a`).
 
