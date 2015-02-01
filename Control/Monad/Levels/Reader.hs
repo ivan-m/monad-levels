@@ -1,6 +1,6 @@
 {-# LANGUAGE ConstraintKinds, DataKinds, FlexibleContexts, FlexibleInstances,
-             MultiParamTypeClasses, PolyKinds, RankNTypes, ScopedTypeVariables,
-             TypeFamilies #-}
+             MultiParamTypeClasses, PolyKinds, ScopedTypeVariables, TypeFamilies
+             #-}
 
 {- |
    Module      : Control.Monad.Levels.Reader

@@ -1,6 +1,5 @@
 {-# LANGUAGE ConstraintKinds, DataKinds, FlexibleContexts,
-             MultiParamTypeClasses, PolyKinds, RankNTypes, ScopedTypeVariables,
-             TypeFamilies, UndecidableInstances #-}
+             MultiParamTypeClasses, ScopedTypeVariables, TypeFamilies #-}
 
 {- |
    Module      : Control.Monad.Levels

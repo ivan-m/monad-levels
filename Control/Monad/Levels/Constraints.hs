@@ -1,7 +1,7 @@
 {-# LANGUAGE ConstraintKinds, DataKinds, DefaultSignatures, FlexibleContexts,
-             FlexibleInstances, KindSignatures, MultiParamTypeClasses,
-             RankNTypes, ScopedTypeVariables, TupleSections, TypeFamilies,
-             TypeOperators, UndecidableInstances #-}
+             FlexibleInstances, MultiParamTypeClasses, ScopedTypeVariables,
+             TupleSections, TypeFamilies, TypeOperators, UndecidableInstances
+             #-}
 
 -- unsafeCoerceConstraint is used to prevent the need for a complex
 -- induction proof (which I'm not sure can actually be achieved).
