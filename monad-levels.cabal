@@ -5,6 +5,8 @@ name:                monad-levels
 version:             0.1.0.0
 synopsis:            Specific levls of monad transformers
 -- description:
+homepage:            https://github.com/ivan-m/monad-levels
+bug-reports:         https://github.com/ivan-m/monad-levels/issues
 license:             MIT
 license-file:        LICENSE
 author:              Ivan Lazar Miljenovic
@@ -15,6 +17,10 @@ build-type:          Simple
 extra-source-files:  README.md
                      TODO.md
 cabal-version:       >=1.10
+
+source-repository head
+  type: git
+  location: git://github.com/ivan-m/monad-levels.git
 
 library
   exposed-modules:     Control.Monad.Levels
