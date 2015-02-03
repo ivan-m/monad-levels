@@ -2,7 +2,7 @@
 -- documentation, see http://haskell.org/cabal/users-guide/
 
 name:                monad-levels
-version:             0.1.0.0
+version:             0.1.0.1
 synopsis:            Specific levels of monad transformers
 description:         An automatic way of adding instances to monad classes.
 homepage:            https://github.com/ivan-m/monad-levels
