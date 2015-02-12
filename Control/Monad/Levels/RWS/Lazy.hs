@@ -2,7 +2,7 @@
    Module      : Control.Monad.Levels.RWS.Lazy
    Description : Lazy monad with reader, writer and state abilities
    Copyright   : (c) Ivan Lazar Miljenovic
-   License     : 3-Clause BSD-style
+   License     : MIT
    Maintainer  : Ivan.Miljenovic@gmail.com
 
 Note that the original definitions are used for the various reader,

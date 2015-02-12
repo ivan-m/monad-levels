@@ -2,7 +2,7 @@
    Module      : Control.Monad.Levels.State.Lazy
    Description : Lazy stateful computations
    Copyright   : (c) Ivan Lazar Miljenovic
-   License     : 3-Clause BSD-style
+   License     : MIT
    Maintainer  : Ivan.Miljenovic@gmail.com
 
 Lazy stateful computations.

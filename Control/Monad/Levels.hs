@@ -5,7 +5,7 @@
    Module      : Control.Monad.Levels
    Description : Explicit level-based monad transformer stacks
    Copyright   : (c) Ivan Lazar Miljenovic
-   License     : 3-Clause BSD-style
+   License     : MIT
    Maintainer  : Ivan.Miljenovic@gmail.com
 
 

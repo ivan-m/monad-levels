@@ -9,7 +9,7 @@
    Module      : Control.Monad.Levels.Except
    Description : Error-handling monadic computations
    Copyright   : (c) Ivan Lazar Miljenovic
-   License     : 3-Clause BSD-style
+   License     : MIT
    Maintainer  : Ivan.Miljenovic@gmail.com
 
 Computations which may fail or throw exceptions.

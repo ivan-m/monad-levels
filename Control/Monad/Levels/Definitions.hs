@@ -7,7 +7,7 @@
    Module      : Control.Monad.Levels.Definitions
    Description : Specific levls of monad transformers
    Copyright   : (c) Ivan Lazar Miljenovic
-   License     : 3-Clause BSD-style
+   License     : MIT
    Maintainer  : Ivan.Miljenovic@gmail.com
 
 

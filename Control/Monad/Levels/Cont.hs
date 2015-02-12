@@ -5,7 +5,7 @@
    Module      : Control.Monad.Levels.Cont
    Description : Continuation monad handling
    Copyright   : (c) Ivan Lazar Miljenovic
-   License     : 3-Clause BSD-style
+   License     : MIT
    Maintainer  : Ivan.Miljenovic@gmail.com
 
 This module allows inclusion of 'ContT' into your monad stack so as to

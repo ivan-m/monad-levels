@@ -5,7 +5,7 @@
    Module      : Control.Monad.Levels.ConstraintPassing
    Description : Whether a transformer allows a constraint to pass through
    Copyright   : (c) Ivan Lazar Miljenovic
-   License     : 3-Clause BSD-style
+   License     : MIT
    Maintainer  : Ivan.Miljenovic@gmail.com
 
 This module is defined separately as it's the only one that uses the

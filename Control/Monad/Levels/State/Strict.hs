@@ -2,7 +2,7 @@
    Module      : Control.Monad.Levels.State.Strict
    Description : Strict stateful computations
    Copyright   : (c) Ivan Lazar Miljenovic
-   License     : 3-Clause BSD-style
+   License     : MIT
    Maintainer  : Ivan.Miljenovic@gmail.com
 
 Strict stateful computations.

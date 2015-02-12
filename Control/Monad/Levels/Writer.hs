@@ -6,7 +6,7 @@
    Module      : Control.Monad.Levels.Writer
    Description : Writer/logging monads
    Copyright   : (c) Ivan Lazar Miljenovic
-   License     : 3-Clause BSD-style
+   License     : MIT
    Maintainer  : Ivan.Miljenovic@gmail.com
 
 
