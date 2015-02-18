@@ -124,6 +124,10 @@ listen = lowerSat c f m a _listen
 
 type CanPass w m a = SatisfyConstraintF (IsWriter w) m a (PassFn w)
 
+-- We use Endo here because to be able to lower a MonadicTuple, the
+-- value provided must be a Monoid.  We can't use the @a -> b@
+-- instance as it has @mempty = const mempty@ when we actually want
+-- @mempty = id@, which is what Endo provides.
 type PassFn w = MkVarFn (MonadicTuple (Endo w))
 
 -- | Execute the action @m@ (which returns a value and a function) and
