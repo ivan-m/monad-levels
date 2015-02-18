@@ -26,6 +26,7 @@ module Control.Monad.Levels.Constraints
        , SatisfyConstraint
        , SatisfyConstraintF
        , SatMonad
+       , SatValue
        , SatMonadValue
        , CanLowerFunc
        , SatFunction
@@ -253,6 +254,9 @@ type SatDepth (c :: (* -> *) -> Constraint) (m :: * -> *) = FindTrue (TrySatisfy
 
 -- | The Monad in the tower that satisfies the provided constraint.
 type SatMonad (c :: (* -> *) -> Constraint) (m :: * -> *) = SatMonad_ (SatDepth c m) c m
+
+-- | The value found in the 'SatMonad' when the constraint is satisfied.
+type SatValue (c :: (* -> *) -> Constraint) (m :: * -> *) a = SatValue_ (SatDepth c m) c m a
 
 -- -----------------------------------------------------------------------------
 
