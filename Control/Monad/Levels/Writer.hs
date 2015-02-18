@@ -28,8 +28,9 @@ module Control.Monad.Levels.Writer
 import Control.Monad.Levels
 import Control.Monad.Levels.Constraints
 
-import Control.Arrow (second)
-import Data.Monoid   (Endo (..), Monoid (..))
+import Data.Coerce (coerce)
+import Data.Monoid (Endo (..), Monoid (..))
+import Data.Proxy  (asProxyTypeOf)
 
 import qualified Control.Monad.Trans.RWS.Lazy      as LRWS
 import qualified Control.Monad.Trans.RWS.Strict    as SRWS
@@ -128,7 +129,7 @@ type PassFn w = MkVarFn (MonadicTuple (Endo w))
 -- | Execute the action @m@ (which returns a value and a function) and
 --   returns the value, applying the function to the output.
 pass :: forall w m a. (CanPass w m a) => m (a, w -> w) -> m a
-pass = lowerSat c f m a (_pass . fmap (second appEndo)) . fmap (second Endo)
+pass = lowerSat c f m a (_pass . fmap ((`asProxyTypeOf` i) . coerce)) . fmap coerce
   where
     c :: Proxy (IsWriter w)
     c = Proxy
@@ -141,3 +142,6 @@ pass = lowerSat c f m a (_pass . fmap (second appEndo)) . fmap (second Endo)
 
     a :: Proxy a
     a = Proxy
+
+    i :: Proxy (SatValue (IsWriter w) m a, w -> w)
+    i = Proxy
