@@ -156,10 +156,7 @@ innerP _ _ = Proxy
 --   monad in the tower that specifies the constraint.
 type SatisfyConstraint c m = ( SatisfyConstraint_ (SatDepth c m) c m
                              , c (SatMonad c m)
-                             -- Best current way of stating that the
-                             -- satisfying monad is a lower level of
-                             -- the specified one.
-                             , BaseMonad (SatMonad c m) ~ BaseMonad m)
+                             , IsSubTowerOf (SatMonad c m) m)
 
 -- | An extension of 'SatisfyConstraint' that also ensures that any
 --   additional constraints needed to satisfy a 'VariadicFunction' @f@

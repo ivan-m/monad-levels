@@ -1,7 +1,7 @@
 {-# LANGUAGE ConstraintKinds, DataKinds, DefaultSignatures, FlexibleContexts,
-             FlexibleInstances, MultiParamTypeClasses, RankNTypes,
-             ScopedTypeVariables, TupleSections, TypeFamilies, TypeOperators,
-             UndecidableInstances #-}
+             FlexibleInstances, MultiParamTypeClasses, OverlappingInstances,
+             RankNTypes, ScopedTypeVariables, TupleSections, TypeFamilies,
+             TypeOperators, UndecidableInstances #-}
 
 {- |
    Module      : Control.Monad.Levels.Definitions
@@ -117,10 +117,7 @@ instance (Monoid w, MonadTower m) => MonadTower_ (SW.WriterT w m) where
 --
 --   You should use 'MonadLevel' rather than this class in
 --   constraints.
-class (MonadTower m, MonadTower (LowerMonad m)
-      , BaseMonad m ~ BaseMonad (LowerMonad m), BaseMonad (LowerMonad m) ~ BaseMonad m
-      , CanAddInternalM m)
-      => MonadLevel_ m where
+class (IsSubTowerOf (LowerMonad m) m, CanAddInternalM m) => MonadLevel_ m where
 
   type LowerMonad m :: * -> *
 
@@ -170,16 +167,16 @@ coerceWrap _ f = pack (f unpack AddIdent)
     unpack = coerceUnwrap
 {-# INLINE coerceWrap #-}
 
-coerceUnwrap :: forall m c. (MonadLevel m, Forall (IsCoercible m), Forall (InnerSame m))
+coerceUnwrap :: forall m c. (MonadLevel_ m, Forall (IsCoercible m), Forall (InnerSame m))
                             => m c -> LowerMonadValue m c
 coerceUnwrap = coerce \\ (inst :: Forall (InnerSame m) :- InnerSame m c)
                       \\ (inst :: Forall (IsCoercible m) :- IsCoercible m c)
 {-# INLINE coerceUnwrap #-}
 
-class (MonadLevel m, Coercible (m a) (LowerMonadValue m a), Coercible (LowerMonadValue m a) (m a))
+class (MonadLevel_ m, Coercible (m a) (LowerMonadValue m a), Coercible (LowerMonadValue m a) (m a))
       => IsCoercible m a
 
-instance (MonadLevel m, Coercible (m a) (LowerMonadValue m a), Coercible (LowerMonadValue m a) (m a))
+instance (MonadLevel_ m, Coercible (m a) (LowerMonadValue m a), Coercible (LowerMonadValue m a) (m a))
          => IsCoercible m a
 
 type CanUnwrap_ m a b = CheckOtherAllowed (AllowOtherValues m) a b
@@ -462,3 +459,16 @@ class ValidConstraint (c :: (* -> *) -> Constraint) where
 
 instance ValidConstraint IsBaseMonad where
   type ConstraintSatisfied IsBaseMonad m = SameMonad (BaseMonad m) m
+
+-- -----------------------------------------------------------------------------
+
+-- | @IsSubTowerOf s m@ denotes that @s@ is a part of the @m@
+--   @MonadTower@.
+class (MonadTower_ s, MonadTower_ m, BaseMonad s ~ BaseMonad m) => IsSubTowerOf s m
+
+instance (MonadTower m) => IsSubTowerOf m m
+
+instance (MonadTower s, MonadLevel_ m, IsSubTowerOf s (LowerMonad m)) => IsSubTowerOf s m
+
+instance (MonadTower s) => ValidConstraint (IsSubTowerOf s) where
+  type ConstraintSatisfied (IsSubTowerOf s) m = SameMonad s m

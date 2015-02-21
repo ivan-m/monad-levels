@@ -47,6 +47,10 @@ module Control.Monad.Levels
        , HasTransformer
        , TransformedMonad
        , liftT
+         -- ** Lifting from anywhere in the monad tower
+       , HasSubTower
+       , IsSubTowerOf
+       , liftSubTower
        ) where
 
 import Control.Monad.Levels.Constraints
@@ -74,6 +78,15 @@ type HasBaseMonad m = SatisfyConstraint IsBaseMonad m
 liftBase :: (HasBaseMonad m) => BaseMonad m a -> m a
 liftBase m = liftSat (Proxy :: Proxy IsBaseMonad) m
 {-# INLINE liftBase #-}
+
+-- | The second part of this constraint is required as it is not
+--   possible to derive that a sub-tower is it's own satisfying monad.
+type HasSubTower s m = ( SatisfyConstraint (IsSubTowerOf s) m
+                       , s ~ SatMonad (IsSubTowerOf s) m)
+
+-- | Lift a lower part of the tower up to the top.
+liftSubTower :: forall s m a. (HasSubTower s m) => s a -> m a
+liftSubTower = liftSat (Proxy :: Proxy (IsSubTowerOf s))
 
 type BaseMonadOf b m = (HasBaseMonad m, BaseMonad m ~ b, b ~ BaseMonad m)
 
