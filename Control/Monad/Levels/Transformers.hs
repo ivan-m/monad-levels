@@ -23,18 +23,8 @@ module Control.Monad.Levels.Transformers
 import Control.Monad.Levels.Constraints
 import Control.Monad.Levels.Definitions
 
-import           Control.Monad.Trans.Cont         (ContT)
-import           Control.Monad.Trans.Except       (ExceptT)
-import           Control.Monad.Trans.List         (ListT)
-import           Control.Monad.Trans.Reader
-import qualified Control.Monad.Trans.State.Lazy   as LSt
-import qualified Control.Monad.Trans.State.Strict as SSt
-
 -- -----------------------------------------------------------------------------
 
--- | Unlike 'HasBaseMonad', this is not a universal constraint
---   applicable to all 'MonadLevel' instances, as otherwise it can be
---   used to bypass the lack of an allowed constraint.
 type HasTransformer t m = ( SatisfyConstraint (IsTransformer t) m
                           , MonadLevel (TransformedMonad t m)
                           , TransformedMonad t m ~ t (LowerMonad (TransformedMonad t m)))
@@ -58,20 +48,5 @@ liftT :: (HasTransformer t m) => TransformedMonad t m a -> m a
 liftT m = liftSat (Proxy :: Proxy (IsTransformer t)) m
 
 -- -----------------------------------------------------------------------------
--- ContT and ListT instances
 
--- Note: RWS transformers aren't allowed for ContT and ListT as they
--- don't allow passing through of Writer manipulations.
-
-instance (MonadLevel m) => ConstraintPassThrough (IsTransformer (ContT r)) (ListT m) True
-
-instance (MonadLevel m) => ConstraintPassThrough (IsTransformer (ExceptT e)) (ListT m) True
-
-instance (MonadLevel m) => ConstraintPassThrough (IsTransformer (ReaderT r)) (ContT c m) True
-instance (MonadLevel m) => ConstraintPassThrough (IsTransformer (ReaderT r)) (ListT m) True
-
-instance (MonadLevel m) => ConstraintPassThrough (IsTransformer (LSt.StateT s)) (ContT r m) True
-instance (MonadLevel m) => ConstraintPassThrough (IsTransformer (LSt.StateT s)) (ListT m) True
-
-instance (MonadLevel m) => ConstraintPassThrough (IsTransformer (SSt.StateT s)) (ContT r m) True
-instance (MonadLevel m) => ConstraintPassThrough (IsTransformer (SSt.StateT s)) (ListT m) True
+instance (MonadLevel m) => ConstraintPassThrough (IsTransformer t) m True
