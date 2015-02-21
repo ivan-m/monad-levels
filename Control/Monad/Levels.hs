@@ -43,7 +43,7 @@ module Control.Monad.Levels
        , liftBase
        , BaseMonadOf
        , liftIO
-         -- * Lifting from a specific transformer
+         -- ** Lifting from a specific transformer
        , HasTransformer
        , TransformedMonad
        , liftT
