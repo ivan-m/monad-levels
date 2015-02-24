@@ -57,9 +57,7 @@ class (Applicative m, Monad m) => MonadTower_ m where
 
 -- | This is 'MonadTower_' with additional sanity constraints to
 --   ensure that applying 'BaseMonad' is idempotent.
-type MonadTower m = ( MonadTower_ m, MonadTower_ (BaseMonad m)
-                    , BaseMonad (BaseMonad m) ~ BaseMonad m
-                    , BaseMonad m ~ BaseMonad (BaseMonad m))
+type MonadTower m = (MonadTower_ m, IsBaseMonad (BaseMonad m))
 
 -- -----------------------------------------------------------------------------
 
@@ -433,9 +431,9 @@ instance (Monoid w, MonadTower m) => MonadLevel_ (SW.WriterT w m) where
 
 -- -----------------------------------------------------------------------------
 
-class (MonadTower m, m ~ BaseMonad m, BaseMonad m ~ m) => IsBaseMonad m
+class (MonadTower_ m, m ~ BaseMonad m, BaseMonad m ~ m) => IsBaseMonad m
 
-instance (MonadTower m, m ~ BaseMonad m, BaseMonad m ~ m) => IsBaseMonad m
+instance (MonadTower_ m, m ~ BaseMonad m, BaseMonad m ~ m) => IsBaseMonad m
 
 type family SameMonad (m :: * -> *) (n :: * -> *) where
   SameMonad m m = True
